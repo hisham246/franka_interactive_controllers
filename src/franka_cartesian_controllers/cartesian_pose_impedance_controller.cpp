@@ -374,83 +374,80 @@ void CartesianPoseImpedanceController::update(const ros::Time& /*time*/,
   // ROS_WARN_STREAM_THROTTLE(0.5, "Desired control torque:" << tau_d.transpose());
 
 
-  // CBF-QP Optimization
-    // Define the alpha parameter
-  double alpha = 50.0;  // Example value, adjust as needed
+  // // CBF-QP Optimization
+  //   // Define the alpha parameter
+  // double alpha = 50.0;  // Example value, adjust as needed
 
-  // Instantiate CBFSystem
-  franka_interactive_controllers::CBFSystem cbf_system(q, dq, inertia, coriolis, gravity, alpha);
+  // // Instantiate CBFSystem
+  // franka_interactive_controllers::CBFSystem cbf_system(q, dq, inertia, coriolis, gravity, alpha);
 
-  USING_NAMESPACE_QPOASES
+  // USING_NAMESPACE_QPOASES
 
-  // Define dimensions
-  const int num_variables = 7;   // Number of control inputs
-  const int num_constraints = 1; // Number of constraints
+  // // Define dimensions
+  // const int num_variables = 7;   // Number of control inputs
+  // const int num_constraints = 1; // Number of constraints
 
-  // Define QP problem matrices and vectors
-  Eigen::Matrix<double, 7, 7> H = Eigen::Matrix<double, 7, 7>::Identity() * 0.7;
-  Eigen::VectorXd g = -H * tau_d;  // g = -H * u_ref
+  // // Define QP problem matrices and vectors
+  // Eigen::Matrix<double, 7, 7> H = Eigen::Matrix<double, 7, 7>::Identity() * 0.7;
+  // Eigen::VectorXd g = -H * tau_d;  // g = -H * u_ref
 
-  double h = cbf_system.h_x();
-  double h_prime = cbf_system.h_prime_x();  // h_prime computation
+  // double h = cbf_system.h_x();
+  // double h_prime = cbf_system.h_prime_x();  // h_prime computation
 
-  // ROS_INFO_STREAM("h:\n" << h);
-  // ROS_INFO_STREAM("h_prime:\n" << h_prime);
+  // // ROS_INFO_STREAM("h:\n" << h);
+  // // ROS_INFO_STREAM("h_prime:\n" << h_prime);
 
-  double lf_h_prime = (cbf_system.dh_prime_dx() * cbf_system.f_x()).value();
-  Eigen::MatrixXd lg_h_prime = cbf_system.dh_prime_dx() * cbf_system.g_x();  // lg_h_prime computation
+  // double lf_h_prime = (cbf_system.dh_prime_dx() * cbf_system.f_x()).value();
+  // Eigen::MatrixXd lg_h_prime = cbf_system.dh_prime_dx() * cbf_system.g_x();  // lg_h_prime computation
 
-  Eigen::MatrixXd A = -lg_h_prime.transpose();  // A is the constraint matrix (1 x 7)
-  double b = lf_h_prime + 30.0 * h_prime;  // cbf_gamma = 20.0
+  // Eigen::MatrixXd A = -lg_h_prime.transpose();  // A is the constraint matrix (1 x 7)
+  // double b = lf_h_prime + 30.0 * h_prime;  // cbf_gamma = 20.0
 
-  // Constraint bounds (since it's a single inequality constraint, lbA = -inf and ubA = b)
-  Eigen::VectorXd lbA = Eigen::VectorXd::Constant(num_constraints, -qpOASES::INFTY); // -inf
-  double ubA = b;  // upper bound = b
+  // // Constraint bounds (since it's a single inequality constraint, lbA = -inf and ubA = b)
+  // Eigen::VectorXd lbA = Eigen::VectorXd::Constant(num_constraints, -qpOASES::INFTY); // -inf
+  // double ubA = b;  // upper bound = b
 
-  // Setup QP problem
-  QProblem qp_solver(num_variables, num_constraints);
-  Options options;
-  options.printLevel = PL_NONE;  // Suppress all terminal output from qpOASES
-  qp_solver.setOptions(options);
+  // // Setup QP problem
+  // QProblem qp_solver(num_variables, num_constraints);
+  // Options options;
+  // options.printLevel = PL_NONE;  // Suppress all terminal output from qpOASES
+  // qp_solver.setOptions(options);
 
-  // Convert Eigen matrices to qpOASES format
-  real_t H_qp[49];  // H is a 7x7 matrix
-  real_t g_qp[7];   // g is a 7x1 vector
-  real_t A_qp[7];   // A is a 1x7 matrix
-  real_t lb_qp[7] = {-87, -87, -87, -87, -12, -12, -12};  // Lower bounds for control inputs (optional, could be set to -inf)
-  real_t ub_qp[7] = {87, 87, 87, 87, 12, 12, 12};  // Upper bounds for control inputs
+  // // Convert Eigen matrices to qpOASES format
+  // real_t H_qp[49];  // H is a 7x7 matrix
+  // real_t g_qp[7];   // g is a 7x1 vector
+  // real_t A_qp[7];   // A is a 1x7 matrix
+  // real_t lb_qp[7] = {-87, -87, -87, -87, -12, -12, -12};  // Lower bounds for control inputs (optional, could be set to -inf)
+  // real_t ub_qp[7] = {87, 87, 87, 87, 12, 12, 12};  // Upper bounds for control inputs
 
-  real_t lbA_qp[1]; // Lower bounds for constraints
-  real_t ubA_qp[1]; // Upper bounds for constraints
+  // real_t lbA_qp[1]; // Lower bounds for constraints
+  // real_t ubA_qp[1]; // Upper bounds for constraints
 
-  std::copy(H.data(), H.data() + 49, H_qp);
-  std::copy(g.data(), g.data() + 7, g_qp);
-  std::copy(A.data(), A.data() + 7, A_qp);
+  // std::copy(H.data(), H.data() + 49, H_qp);
+  // std::copy(g.data(), g.data() + 7, g_qp);
+  // std::copy(A.data(), A.data() + 7, A_qp);
 
-  lbA_qp[0] = lbA[0];
-  ubA_qp[0] = ubA;
-  // Measure the solve time
-  auto start_time = std::chrono::high_resolution_clock::now();
+  // lbA_qp[0] = lbA[0];
+  // ubA_qp[0] = ubA;
+  // // Measure the solve time
+  // auto start_time = std::chrono::high_resolution_clock::now();
 
-  int_t nWSR = 10;
-  qp_solver.init(H_qp, g_qp, A_qp, lb_qp, ub_qp, lbA_qp, ubA_qp, nWSR);
+  // int_t nWSR = 10;
+  // qp_solver.init(H_qp, g_qp, A_qp, lb_qp, ub_qp, lbA_qp, ubA_qp, nWSR);
 
-  auto end_time = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> solve_time = end_time - start_time;
+  // auto end_time = std::chrono::high_resolution_clock::now();
+  // std::chrono::duration<double> solve_time = end_time - start_time;
 
-  // Log the solve time
-  // ROS_INFO_STREAM("QP solve time: " << solve_time.count() << " seconds");
+  // // Log the solve time
+  // // ROS_INFO_STREAM("QP solve time: " << solve_time.count() << " seconds");
 
-  // Get the solution
-  real_t tau_optim[7];
-  qp_solver.getPrimalSolution(tau_optim);
+  // // Get the solution
+  // real_t tau_optim[7];
+  // qp_solver.getPrimalSolution(tau_optim);
 
   // for (int i = 0; i < 7; ++i) {
   //   tau_star(i) = tau_optim[i];
   // }
-
-  // Saturate torque rate to avoid discontinuities
-  tau_d << saturateTorqueRate(tau_d, tau_J_d);
 
   // // Saturate torque rate to avoid discontinuities
   // tau_star << saturateTorqueRate(tau_star, tau_J_d);
@@ -460,24 +457,26 @@ void CartesianPoseImpedanceController::update(const ros::Time& /*time*/,
   //   joint_handles_[i].setCommand(tau_optim[i]);
   // }
 
+  // for (size_t i = 0; i < 7; ++i) {
+  //   joint_handles_[i].setCommand(tau_star(i));
+  // }
+
+  // Saturate torque rate to avoid discontinuities
+  tau_d << saturateTorqueRate(tau_d, tau_J_d);
 
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
 
-  // for (size_t i = 0; i < 7; ++i) {
-  //   joint_handles_[i].setCommand(tau_star(i));
-  // }
-
-  tau_full << tau_star + gravity;
+  // tau_full << tau_star + gravity;
 
   // Publish the tau_star message
-  publishOptimalTorques(tau_star);
+  // publishOptimalTorques(tau_star);
   publishDesiredTorques(tau_d);
   publishFullTorques(tau_full);
   
-  publishCBF(h);
-  publishCBFPrime(h_prime);
+  // publishCBF(h);
+  // publishCBFPrime(h_prime);
 
 
   //////////////////////////////////////////////////////////////////////////////////////////////////
