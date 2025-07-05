@@ -11,6 +11,8 @@ import threading
 import sys
 import os
 
+from dynamic_reconfigure.client import Client as DynamicReconfigureClient
+
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from teleop_utils.spacemouse_shared_memory import Spacemouse
@@ -73,20 +75,36 @@ def main():
     dt = 1.0 / frequency
     command_latency = dt / 2
 
+    # Publisher for Cartesian pose
     pose_pub = rospy.Publisher('/cartesian_impedance_controller/desired_pose', PoseStamped, queue_size=1)
-    print("ROS publisher ready.")
+    rospy.loginfo("ROS publisher ready.")
+
+    # Dynamic Reconfigure Client for stiffness updates
+    dyn_client = DynamicReconfigureClient('/cartesian_impedance_controller/dynamic_reconfigure_compliance_param_node')
+
+    impedance_profiles = [
+        dict(Kx=100, Ky=100, Kz=100, Rx=10, Ry=10, Rz=10),
+        dict(Kx=150, Ky=150, Kz=150, Rx=20, Ry=20, Rz=20),
+        dict(Kx=200, Ky=200, Kz=200, Rx=30, Ry=30, Rz=30),
+        dict(Kx=300, Ky=300, Kz=300, Rx=30, Ry=30, Rz=30),
+        dict(Kx=400, Ky=400, Kz=400, Rx=30, Ry=30, Rz=30),
+        dict(Kx=500, Ky=500, Kz=500, Rx=30, Ry=30, Rz=30),
+    ]
+    imp_idx = 0
+    impedance_update_period = 5.0  # seconds
+    last_impedance_update = time.monotonic()
 
     # Wait for initial robot pose
-    print("Waiting for /franka_state_controller/ee_pose...")
+    rospy.loginfo("Waiting for /franka_state_controller/ee_pose...")
     pose_listener = InitialPoseListener()
     target_pose = pose_listener.wait_for_pose()
-    print(f"Initial pose received: {target_pose}")
+    rospy.loginfo(f"Initial pose received: {target_pose}")
 
     with SharedMemoryManager() as shm_manager, \
          Spacemouse(shm_manager=shm_manager) as sm, \
          KeystrokeCounter() as key_counter:
 
-        print("SpaceMouse ready. Press 'q' to quit.")
+        rospy.loginfo("SpaceMouse ready. Press 'q' to quit.")
 
         t_start = time.monotonic()
         iter_idx = 0
@@ -103,6 +121,14 @@ def main():
                     stop = True
 
             precise_wait(t_sample)
+
+            # Periodic impedance update
+            now = time.monotonic()
+            if now - last_impedance_update >= impedance_update_period:
+                imp_idx = (imp_idx + 1) % len(impedance_profiles)
+                dyn_client.update_configuration(impedance_profiles[imp_idx])
+                rospy.loginfo(f"[Impedance Switch] Updated to: {impedance_profiles[imp_idx]}")
+                last_impedance_update = now
 
             # Get SpaceMouse motion
             sm_state = sm.get_motion_state_transformed()
