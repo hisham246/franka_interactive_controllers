@@ -15,7 +15,7 @@
 #include <ros/time.h>
 #include <Eigen/Dense>
 
-#include <franka_interactive_controllers/minimal_compliance_paramConfig.h>
+#include <franka_interactive_controllers/compliance_full_paramConfig.h>
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 
@@ -57,39 +57,27 @@ class CartesianPoseImpedanceController : public controller_interface::MultiInter
   Eigen::Quaterniond orientation_d_;
   Eigen::Vector3d position_d_target_;
   Eigen::Quaterniond orientation_d_target_;
+  std::mutex position_and_orientation_d_target_mutex_;
+
 
   // Variables for initialization and tool compensation
   Eigen::Matrix<double, 6, 1> tool_compensation_force_;
   bool activate_tool_compensation_;
   
   // Dynamic reconfigure
-  std::unique_ptr<dynamic_reconfigure::Server<franka_interactive_controllers::minimal_compliance_paramConfig>>
+  std::unique_ptr<dynamic_reconfigure::Server<franka_interactive_controllers::compliance_full_paramConfig>>
       dynamic_server_compliance_param_;
   ros::NodeHandle dynamic_reconfigure_compliance_param_node_;
-  void complianceParamCallback(franka_interactive_controllers::minimal_compliance_paramConfig& config,
+  void complianceParamCallback(franka_interactive_controllers::compliance_full_paramConfig& config,
                                uint32_t level);
 
   // Desireds pose subscriber
   ros::Subscriber sub_desired_pose_;
   void desiredPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
 
-  // Optimized torques from the CBF-QP controller
-  ros::Publisher tau_star_pub_;
-  void publishOptimalTorques(const Eigen::Matrix<double, 7, 1>& tau_star);
-
   // Desired torques from the Cartesian impedance controller
   ros::Publisher tau_d_pub_;
   void publishDesiredTorques(const Eigen::Matrix<double, 7, 1>& tau_d);
-
-  // Optimized torques from the CBF-QP controller + gravity
-  ros::Publisher tau_full_pub_;
-  void publishFullTorques(const Eigen::Matrix<double, 7, 1>& tau_full);
-
-  ros::Publisher h_pub_;
-  void publishCBF(double h);
-
-  ros::Publisher h_prime_pub_;
-  void publishCBFPrime(double h_prime);
 
   ros::Publisher franka_EE_wrench_pub;
   ros::Publisher franka_wrench_pub;
