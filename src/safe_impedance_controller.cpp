@@ -3,7 +3,7 @@
 // Use of this source code is governed by the Apache-2.0 license.
 // Current development and modification of this code by Nadia Figueroa (MIT) 2021.
 
-#include <cartesian_pose_impedance_controller.h>
+#include <safe_impedance_controller.h>
 
 #include <cmath>
 #include <memory>
