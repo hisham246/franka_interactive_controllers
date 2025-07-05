@@ -335,23 +335,23 @@ void CartesianPoseImpedanceController::complianceParamCallback(
     uint32_t /*level*/) {
   // Set individual translational stiffness for each axis
   cartesian_stiffness_target_.setIdentity();
-  cartesian_stiffness_target_(0, 0) = config.translational_stiffness_x;
-  cartesian_stiffness_target_(1, 1) = config.translational_stiffness_y;
-  cartesian_stiffness_target_(2, 2) = config.translational_stiffness_z;
+  cartesian_stiffness_target_(0, 0) = config.Kx;
+  cartesian_stiffness_target_(1, 1) = config.Ky;
+  cartesian_stiffness_target_(2, 2) = config.Kz;
 
   // Set individual rotational stiffness for each axis
-  cartesian_stiffness_target_(3, 3) = config.rotational_stiffness_x;
-  cartesian_stiffness_target_(4, 4) = config.rotational_stiffness_y;
-  cartesian_stiffness_target_(5, 5) = config.rotational_stiffness_z;
+  cartesian_stiffness_target_(3, 3) = config.Rx;
+  cartesian_stiffness_target_(4, 4) = config.Ry;
+  cartesian_stiffness_target_(5, 5) = config.Rz;
 
   // Set damping to ensure critical damping ratio
   cartesian_damping_target_.setIdentity();
-  cartesian_damping_target_(0, 0) = 2.0 * sqrt(config.translational_stiffness_x);
-  cartesian_damping_target_(1, 1) = 2.0 * sqrt(config.translational_stiffness_y);
-  cartesian_damping_target_(2, 2) = 2.0 * sqrt(config.translational_stiffness_z);
-  cartesian_damping_target_(3, 3) = 2.0 * sqrt(config.rotational_stiffness_x);
-  cartesian_damping_target_(4, 4) = 2.0 * sqrt(config.rotational_stiffness_y);
-  cartesian_damping_target_(5, 5) = 2.0 * sqrt(config.rotational_stiffness_z);
+  cartesian_damping_target_(0, 0) = 2.0 * sqrt(config.Kx);
+  cartesian_damping_target_(1, 1) = 2.0 * sqrt(config.Ky);
+  cartesian_damping_target_(2, 2) = 2.0 * sqrt(config.Kz);
+  cartesian_damping_target_(3, 3) = 2.0 * sqrt(config.Rx);
+  cartesian_damping_target_(4, 4) = 2.0 * sqrt(config.Ry);
+  cartesian_damping_target_(5, 5) = 2.0 * sqrt(config.Rz);
 
   nullspace_stiffness_target_ = config.nullspace_stiffness;
 }
