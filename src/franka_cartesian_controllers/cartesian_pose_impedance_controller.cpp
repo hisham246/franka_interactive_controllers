@@ -117,19 +117,19 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   ////////////////  Parameter Initialization from YAML FILES!!!     /////////
   ///////////////////////////////////////////////////////////////////////////
 
-   // Initialize stiffness and damping gains
-  cartesian_stiffness_target_.setIdentity();
-  cartesian_damping_target_.setIdentity();
-  std::vector<double> cartesian_stiffness_target_yaml;
-  if (!node_handle.getParam("cartesian_stiffness_target", cartesian_stiffness_target_yaml) || cartesian_stiffness_target_yaml.size() != 6) {
-    ROS_ERROR(
-      "CartesianPoseImpedanceController: Invalid or no cartesian_stiffness_target_yaml parameters provided, "
-      "aborting controller init!");
-    return false;
-  }
-  for (int i = 0; i < 6; i ++) {
-    cartesian_stiffness_target_(i,i) = cartesian_stiffness_target_yaml[i];
-  }
+  //  // Initialize stiffness and damping gains
+  // cartesian_stiffness_target_.setIdentity();
+  // cartesian_damping_target_.setIdentity();
+  // std::vector<double> cartesian_stiffness_target_yaml;
+  // if (!node_handle.getParam("cartesian_stiffness_target", cartesian_stiffness_target_yaml) || cartesian_stiffness_target_yaml.size() != 6) {
+  //   ROS_ERROR(
+  //     "CartesianPoseImpedanceController: Invalid or no cartesian_stiffness_target_yaml parameters provided, "
+  //     "aborting controller init!");
+  //   return false;
+  // }
+  // for (int i = 0; i < 6; i ++) {
+  //   cartesian_stiffness_target_(i,i) = cartesian_stiffness_target_yaml[i];
+  // }
   // Damping ratio = 1
 
   // default_cart_stiffness_target_ << 300, 300, 300, 50, 50, 50;
@@ -183,7 +183,7 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   //     q_d_nullspace_[i] = q_nullspace.at(i);
   //   ROS_INFO_STREAM("Desired nullspace position (from YAML): " << std::endl << q_d_nullspace_);
   // }
-   // Added: Publish torques
+   // Publish torques
   tau_d_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/tau_d", 10);
   franka_EE_wrench_pub = node_handle.advertise<geometry_msgs::WrenchStamped>(node_handle.getNamespace() + "/franka_ee_wrench", 20);
   franka_wrench_pub = node_handle.advertise<geometry_msgs::WrenchStamped>(node_handle.getNamespace() + "/franka_wrench", 20);
