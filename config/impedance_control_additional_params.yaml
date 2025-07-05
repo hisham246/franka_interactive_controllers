@@ -28,7 +28,7 @@ external_tool_compensation: [0.14523, 0.64136, -4.40255936, -0.07504, 0.39787, -
 # cartesian_stiffness_target: [1000, 0, 0, 50, 0, 50]
 # RSS: replay:
 # cartesian_stiffness_target: [600, 600, 500, 50, 50, 50]
-cartesian_stiffness_target: [300, 300, 300, 50, 50, 50]
+cartesian_stiffness_target: [100, 100, 100, 50, 50, 50]
 # cartesian_stiffness_target: [1000, 200, 200, 50, 50, 50]
 
 nullspace_stiffness: 0.01

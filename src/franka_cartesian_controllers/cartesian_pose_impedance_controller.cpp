@@ -15,12 +15,11 @@
 
 #include <pseudo_inversion.h>
 #include <hardware_interface/joint_command_interface.h>
-
-#include <qpOASES.hpp> 
-#include <cbf_system.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <std_msgs/Float64.h>
 #include <geometry_msgs/WrenchStamped.h>
+// #include <qpOASES.hpp> 
+// #include <cbf_system.h>
 
 
 namespace franka_interactive_controllers {
@@ -189,11 +188,11 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   }
    // Added: Publish torques
   tau_d_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/tau_d", 10);
-  tau_star_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/tau_star", 10);
+  // tau_star_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/tau_star", 10);
   tau_full_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/tau_full", 10);
 
-  h_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/h_x", 50);
-  h_prime_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/h_prime_x", 50);
+  // h_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/h_x", 50);
+  // h_prime_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>(node_handle.getNamespace() + "/h_prime_x", 50);
   franka_EE_wrench_pub = node_handle.advertise<geometry_msgs::WrenchStamped>(node_handle.getNamespace() + "/franka_ee_wrench", 20);
   franka_wrench_pub = node_handle.advertise<geometry_msgs::WrenchStamped>(node_handle.getNamespace() + "/franka_wrench", 20);
   return true;
@@ -525,13 +524,13 @@ void CartesianPoseImpedanceController::desiredPoseCallback(
   }
 }
 
-void CartesianPoseImpedanceController::publishOptimalTorques(const Eigen::Matrix<double, 7, 1>& tau_star) {
-  std_msgs::Float64MultiArray msg;
-  for (int i = 0; i < tau_star.size(); ++i) {
-    msg.data.push_back(tau_star(i));
-  }
-  tau_star_pub_.publish(msg);
-};
+// void CartesianPoseImpedanceController::publishOptimalTorques(const Eigen::Matrix<double, 7, 1>& tau_star) {
+//   std_msgs::Float64MultiArray msg;
+//   for (int i = 0; i < tau_star.size(); ++i) {
+//     msg.data.push_back(tau_star(i));
+//   }
+//   tau_star_pub_.publish(msg);
+// };
 
 void CartesianPoseImpedanceController::publishDesiredTorques(const Eigen::Matrix<double, 7, 1>& tau_d) {
   std_msgs::Float64MultiArray msg;
@@ -549,17 +548,17 @@ void CartesianPoseImpedanceController::publishFullTorques(const Eigen::Matrix<do
   tau_full_pub_.publish(msg);
 }
 
-void CartesianPoseImpedanceController::publishCBF(double h) {
-  std_msgs::Float64 msg;
-  msg.data = h;
-  h_pub_.publish(msg);
-}
+// void CartesianPoseImpedanceController::publishCBF(double h) {
+//   std_msgs::Float64 msg;
+//   msg.data = h;
+//   h_pub_.publish(msg);
+// }
 
-void CartesianPoseImpedanceController::publishCBFPrime(double h_prime) {
-  std_msgs::Float64 msg;
-  msg.data = h_prime;
-  h_prime_pub_.publish(msg);
-}
+// void CartesianPoseImpedanceController::publishCBFPrime(double h_prime) {
+//   std_msgs::Float64 msg;
+//   msg.data = h_prime;
+//   h_prime_pub_.publish(msg);
+// }
 
 }  // namespace franka_interactive_controllers
 
