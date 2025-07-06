@@ -3,8 +3,8 @@ import numbers
 from queue import (Empty, Full)
 from multiprocessing.managers import SharedMemoryManager
 import numpy as np
-from teleop_utils.shared_memory_util import ArraySpec, SharedAtomicCounter
-from teleop_utils.shared_ndarray import SharedNDArray
+from policy_utils.shared_memory_util import ArraySpec, SharedAtomicCounter
+from policy_utils.shared_ndarray import SharedNDArray
 
 
 class SharedMemoryQueue:

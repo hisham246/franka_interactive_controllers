@@ -15,9 +15,9 @@ from dynamic_reconfigure.client import Client as DynamicReconfigureClient
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
-from teleop_utils.spacemouse_shared_memory import Spacemouse
-from teleop_utils.keystroke_counter import KeystrokeCounter, KeyCode
-from teleop_utils.precise_sleep import precise_wait
+from policy_utils.spacemouse_shared_memory import Spacemouse
+from policy_utils.keystroke_counter import KeystrokeCounter, KeyCode
+from policy_utils.precise_sleep import precise_wait
 
 
 class InitialPoseListener:

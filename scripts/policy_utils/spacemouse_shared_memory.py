@@ -2,7 +2,7 @@ import multiprocessing as mp
 import numpy as np
 import time
 from spnav import spnav_open, spnav_poll_event, spnav_close, SpnavMotionEvent, SpnavButtonEvent
-from teleop_utils.shared_memory_ring_buffer import SharedMemoryRingBuffer
+from policy_utils.shared_memory_ring_buffer import SharedMemoryRingBuffer
 
 class Spacemouse(mp.Process):
     def __init__(self, 
