@@ -80,7 +80,7 @@ def main():
     rospy.loginfo("ROS publisher ready.")
 
     # Dynamic Reconfigure Client for stiffness updates
-    dyn_client = DynamicReconfigureClient('/cartesian_impedance_controller/dynamic_reconfigure_compliance_param_node')
+    dyn_client = DynamicReconfigureClient('/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node')
 
     impedance_profiles = [
         dict(translational_stiffness_x=100, 
