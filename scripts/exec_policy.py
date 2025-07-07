@@ -14,21 +14,16 @@ import pathlib
 import time
 from multiprocessing.managers import SharedMemoryManager
 
-from moviepy.editor import VideoFileClip
 import av
 import click
 import cv2
 import dill
 import hydra
 import numpy as np
-import scipy.spatial.transform as st
 import torch
 from omegaconf import OmegaConf
 import json
 from policy_utils.replay_buffer import ReplayBuffer
-from policy_utils.cv2_util import (
-    get_image_transform
-)
 from policy_utils.cv_util import (
     parse_fisheye_intrinsics,
     FisheyeRectConverter
@@ -43,7 +38,6 @@ from policy_utils.keystroke_counter import (
 from policy_utils.real_inference_util import (get_real_obs_resolution,
                                                 get_real_umi_obs_dict,
                                                 get_real_umi_action)
-from policy_utils.spacemouse_shared_memory import Spacemouse
 import pandas as pd
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
