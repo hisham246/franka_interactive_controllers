@@ -1,9 +1,7 @@
 from typing import Dict, Tuple
-import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange, reduce
+from einops import reduce
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 from policy_utils.normalizer import LinearNormalizer

@@ -5,9 +5,9 @@ Run a policy on the real robot.
 import sys
 import os
 
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-sys.path.append(ROOT_DIR)
-os.chdir(ROOT_DIR)
+# ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
+# sys.path.append(ROOT_DIR)
+# os.chdir(ROOT_DIR)
 
 import os
 import pathlib
@@ -23,6 +23,9 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 import json
+
+sys.path.append(os.path.join(os.path.dirname(__file__)))
+
 from policy_utils.replay_buffer import ReplayBuffer
 from policy_utils.cv_util import (
     parse_fisheye_intrinsics,
@@ -33,7 +36,7 @@ from policy_utils.base_workspace import BaseWorkspace
 from policy_utils.precise_sleep import precise_wait
 from policy_utils.vic_umi_env import VicUmiEnv
 from policy_utils.keystroke_counter import (
-    KeystrokeCounter, Key, KeyCode
+    KeystrokeCounter, KeyCode
 )
 from policy_utils.real_inference_util import (get_real_obs_resolution,
                                                 get_real_umi_obs_dict,
@@ -44,20 +47,14 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 @click.command()
 @click.option('--output', '-o', required=True, help='Directory to save recording')
-@click.option('--robot_ip', default='129.97.71.27')
-@click.option('--gripper_ip', default='129.97.71.27')
-@click.option('--gripper_port', type=int, default=4242)
-@click.option('--gripper_speed', type=float, default=0.05)
 # @click.option('--gripper_force', type=float, default=20.0)
-@click.option('--match_dataset', '-m', default=None, help='Dataset used to overlay and adjust initial condition')
-@click.option('--match_episode', '-me', default=None, type=int, help='Match specific episode from the match dataset')
 @click.option('--match_camera', '-mc', default=0, type=int)
+@click.option('--match_dataset', '-m', default=None, help='Dataset used to overlay and adjust initial condition')
 @click.option('--vis_camera_idx', default=0, type=int, help="Which RealSense camera to visualize.")
 # @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
 @click.option('--steps_per_inference', '-si', default= 1, type=int, help="Action horizon for inference.")
 @click.option('--max_duration', '-md', default=60, help='Max duration for each epoch in seconds.')
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
-@click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
 @click.option('-nm', '--no_mirror', is_flag=True, default=False)
 @click.option('-sf', '--sim_fov', type=float, default=None)
 @click.option('-ci', '--camera_intrinsics', type=str, default=None)
@@ -65,24 +62,22 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--mirror_swap', is_flag=True, default=False)
 @click.option('--temporal_ensembling', is_flag=True, default=True, help='Enable temporal ensembling for inference.')
 
-def main(output, robot_ip, gripper_ip, gripper_port, gripper_speed,
-    match_dataset, match_episode, match_camera,
+def main(output,
+    match_dataset, match_camera,
     vis_camera_idx, 
     steps_per_inference, max_duration,
-    frequency, command_latency, 
+    frequency, 
     no_mirror, sim_fov, camera_intrinsics, 
     mirror_crop, mirror_swap, temporal_ensembling):
-
-    max_gripper_width = 0.1
 
     # Diffusion Transformer
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
 
     # Diffusion UNet
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
 
     # Compliance policy unet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
 
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
@@ -109,9 +104,6 @@ def main(output, robot_ip, gripper_ip, gripper_port, gripper_speed,
         with KeystrokeCounter() as key_counter, \
             VicUmiEnv(
                 output_dir=output, 
-                robot_ip=robot_ip,
-                gripper_ip=gripper_ip,
-                gripper_port=gripper_port,
                 frequency=frequency,
                 obs_image_resolution=obs_res,
                 obs_float32=True,
@@ -137,11 +129,9 @@ def main(output, robot_ip, gripper_ip, gripper_port, gripper_speed,
                 fisheye_converter=fisheye_converter,
                 mirror_crop=mirror_crop,
                 mirror_swap=mirror_swap,
-                # dev_video_path='/dev/video13',
                 # action
                 max_pos_speed=1.5,
                 max_rot_speed=2.0,
-                # robot_type=robot_type,
                 shm_manager=shm_manager) as env:
             cv2.setNumThreads(2)
             print("Waiting for camera")

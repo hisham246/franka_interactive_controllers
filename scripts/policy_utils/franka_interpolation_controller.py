@@ -113,8 +113,6 @@ class FrankaROSInterface:
 class FrankaVariableImpedanceController(mp.Process):
     def __init__(self,
         shm_manager: SharedMemoryManager,
-        robot_ip,
-        robot_port=4242,
         frequency=1000,
         launch_timeout=3,
         joints_init=None,
@@ -128,8 +126,6 @@ class FrankaVariableImpedanceController(mp.Process):
         ):
 
         super().__init__(name="FrankaVariableImpedanceController")
-        self.robot_ip = robot_ip
-        self.robot_port = robot_port
         self.frequency = frequency
         self.launch_timeout = launch_timeout
         self.joints_init = joints_init

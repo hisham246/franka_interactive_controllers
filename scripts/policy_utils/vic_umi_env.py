@@ -26,9 +26,6 @@ class VicUmiEnv:
     def __init__(self, 
             # required params
             output_dir,
-            robot_ip,
-            gripper_ip,
-            gripper_port=4242,
             # env params
             frequency=10,
             # obs
@@ -40,7 +37,6 @@ class VicUmiEnv:
             fisheye_converter=None,
             mirror_crop=False,
             mirror_swap=False,
-            # dev_video_path='/dev/video0',
             # timing
             align_camera_idx=0,
             # this latency compensates receive_timestamp
@@ -206,11 +202,7 @@ class VicUmiEnv:
         
         robot = FrankaVariableImpedanceController(
             shm_manager=shm_manager,
-            robot_ip=robot_ip,
             frequency=1000,
-            Kx_scale=1.0,
-            Kxd_scale=np.array([2.0,1.5,2.0,1.0,1.0,1.0]),
-            # Kxd_scale=np.array([0.75,0.5,0.75,1.0,1.0,1.0]),
             verbose=False,
             receive_latency=robot_obs_latency,
             output_dir=output_dir,
@@ -264,7 +256,7 @@ class VicUmiEnv:
     
     def start(self, wait=True):
         self.camera.start(wait=False)
-        self.gripper.start(wait=False)
+        # self.gripper.start(wait=False)
         self.robot.start(wait=False)
         if wait:
             self.start_wait()
@@ -272,19 +264,19 @@ class VicUmiEnv:
     def stop(self, wait=True):
         self.end_episode()
         self.robot.stop(wait=False)
-        self.gripper.stop(wait=False)
+        # self.gripper.stop(wait=False)
         self.camera.stop(wait=False)
         if wait:
             self.stop_wait()
 
     def start_wait(self):
         self.camera.start_wait()
-        self.gripper.start_wait()
+        # self.gripper.start_wait()
         self.robot.start_wait()
     
     def stop_wait(self):
         self.robot.stop_wait()
-        self.gripper.stop_wait()
+        # self.gripper.stop_wait()
         self.camera.stop_wait()
 
     # ========= context manager ===========
@@ -414,29 +406,29 @@ class VicUmiEnv:
         # g_latency = self.gripper_action_latency if compensate_latency else 0.0
 
         # Kx_trans = np.array([1000.0, 1000.0, 1000.0])
-        Kx_rot = np.array([30.0, 30.0, 30.0])
+        # Kx_rot = np.array([30.0, 30.0, 30.0])
 
         # schedule waypoints
         for i in range(len(new_actions)):
             r_actions = new_actions[i,:6]
-            g_actions = new_actions[i, 9:]
+            # g_actions = new_actions[i, 9:]
             # g_actions = new_actions[i, 6:]
 
-            Kx_trans = new_actions[i, 6:9]
-            Kx = np.concatenate([Kx_trans, Kx_rot])
+            # Kx_trans = new_actions[i, 6:9]
+            # Kx = np.concatenate([Kx_trans, Kx_rot])
             
             # Damping gains
-            Kxd = 2 * 0.707 * np.sqrt(Kx)
+            # Kxd = 2 * 0.707 * np.sqrt(Kx)
 
             # Update the impedance gains with Kx and Kxd
-            self.robot.set_impedance(Kx, Kxd)
+            # self.robot.set_impedance(Kx, Kxd)
 
             self.robot.schedule_waypoint(
                 pose=r_actions,
                 target_time=new_timestamps[i]-r_latency
             )
-            self.gripper.schedule_waypoint(
-                pos=g_actions)
+            # self.gripper.schedule_waypoint(
+            #     pos=g_actions)
 
         # record actions
         if self.action_accumulator is not None:
