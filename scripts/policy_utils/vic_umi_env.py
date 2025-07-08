@@ -6,6 +6,7 @@ import math
 import cv2
 from multiprocessing.managers import SharedMemoryManager
 from policy_utils.franka_interpolation_controller import FrankaVariableImpedanceController
+from policy_utils.franka_hand_controller import FrankaHandController
 from policy_utils.multi_uvc_camera import MultiUvcCamera
 from policy_utils.video_recorder import VideoRecorder
 from policy_utils.timestamp_accumulator import (
@@ -26,6 +27,8 @@ class VicUmiEnv:
     def __init__(self, 
             # required params
             output_dir,
+            gripper_ip,
+            gripper_port=4242,
             # env params
             frequency=10,
             # obs
@@ -209,17 +212,17 @@ class VicUmiEnv:
             episode_id=self.episode_id_counter,
         )
         
-        # gripper = FrankaHandController(
-        #     host=gripper_ip,
-        #     port=gripper_port,
-        #     speed=0.05,
-        #     force=20.0,
-        #     update_rate=frequency
-        # )
+        gripper = FrankaHandController(
+            host=gripper_ip,
+            port=gripper_port,
+            speed=0.05,
+            force=20.0,
+            update_rate=frequency
+        )
 
         self.camera = camera
         self.robot = robot
-        # self.gripper = gripper
+        self.gripper = gripper
         self.frequency = frequency
         self.max_obs_buffer_size = max_obs_buffer_size
         self.max_pos_speed = max_pos_speed
@@ -256,7 +259,7 @@ class VicUmiEnv:
     
     def start(self, wait=True):
         self.camera.start(wait=False)
-        # self.gripper.start(wait=False)
+        self.gripper.start(wait=False)
         self.robot.start(wait=False)
         if wait:
             self.start_wait()
@@ -264,19 +267,19 @@ class VicUmiEnv:
     def stop(self, wait=True):
         self.end_episode()
         self.robot.stop(wait=False)
-        # self.gripper.stop(wait=False)
+        self.gripper.stop(wait=False)
         self.camera.stop(wait=False)
         if wait:
             self.stop_wait()
 
     def start_wait(self):
         self.camera.start_wait()
-        # self.gripper.start_wait()
+        self.gripper.start_wait()
         self.robot.start_wait()
     
     def stop_wait(self):
         self.robot.stop_wait()
-        # self.gripper.stop_wait()
+        self.gripper.stop_wait()
         self.camera.stop_wait()
 
     # ========= context manager ===========
@@ -413,7 +416,7 @@ class VicUmiEnv:
         for i in range(len(new_actions)):
             r_actions = new_actions[i,:6]
             # g_actions = new_actions[i, 9:]
-            # g_actions = new_actions[i, 6:]
+            g_actions = new_actions[i, 6:]
 
             # Kx_trans = new_actions[i, 6:9]
             # Kx = np.concatenate([Kx_trans, Kx_rot])
@@ -428,8 +431,8 @@ class VicUmiEnv:
                 pose=r_actions,
                 target_time=new_timestamps[i]-r_latency
             )
-            # self.gripper.schedule_waypoint(
-            #     pos=g_actions)
+            self.gripper.schedule_waypoint(
+                pos=g_actions)
 
         # record actions
         if self.action_accumulator is not None:

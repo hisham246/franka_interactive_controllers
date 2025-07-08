@@ -45,6 +45,8 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 @click.command()
 @click.option('--output', '-o', required=True, help='Directory to save recording')
+@click.option('--gripper_ip', default='129.97.71.27')
+@click.option('--gripper_port', type=int, default=4242)
 # @click.option('--gripper_force', type=float, default=20.0)
 @click.option('--match_camera', '-mc', default=0, type=int)
 @click.option('--match_dataset', '-m', default=None, help='Dataset used to overlay and adjust initial condition')
@@ -60,12 +62,10 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--mirror_swap', is_flag=True, default=False)
 @click.option('--temporal_ensembling', is_flag=True, default=True, help='Enable temporal ensembling for inference.')
 
-def main(output,
-    match_dataset, match_camera,
-    vis_camera_idx, 
+def main(output, gripper_ip, gripper_port,
+    match_dataset, match_camera, vis_camera_idx, 
     steps_per_inference, max_duration,
-    frequency, 
-    no_mirror, sim_fov, camera_intrinsics, 
+    frequency, no_mirror, sim_fov, camera_intrinsics, 
     mirror_crop, mirror_swap, temporal_ensembling):
 
     # Diffusion Transformer
@@ -103,10 +103,11 @@ def main(output,
 
     print("steps_per_inference:", steps_per_inference)
     with SharedMemoryManager() as shm_manager:
-        # with Spacemouse(shm_manager=shm_manager) as sm, \
         with KeystrokeCounter() as key_counter, \
             VicUmiEnv(
-                output_dir=output, 
+                output_dir=output,
+                gripper_ip=gripper_ip,
+                gripper_port=gripper_port, 
                 frequency=frequency,
                 obs_image_resolution=obs_res,
                 obs_float32=True,

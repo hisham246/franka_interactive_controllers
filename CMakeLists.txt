@@ -175,6 +175,7 @@ catkin_install_python(
   scripts/franka_gui_gripper_run.py
   scripts/spacemouse_teleop.py
   scripts/exec_policy.py
+  scripts/move_gripper.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
