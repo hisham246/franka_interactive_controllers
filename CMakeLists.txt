@@ -178,6 +178,11 @@ catkin_install_python(
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
+# install(
+#   DIRECTORY teleop/
+#   DESTINATION ${CATKIN_PACKAGE_PYTHON_DESTINATION}
+# )
+
 ## Tools
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/ClangTools.cmake OPTIONAL
   RESULT_VARIABLE CLANG_TOOLS

@@ -252,7 +252,7 @@ class VicUmiEnv:
     # ======== start-stop API =============
     @property
     def is_ready(self):
-        return self.camera.is_ready and self.robot.is_ready and self.gripper.is_ready
+        return self.camera.is_ready and self.robot.is_ready
     
     def start(self, wait=True):
         self.camera.start(wait=False)
@@ -309,12 +309,13 @@ class VicUmiEnv:
             k=k, 
             out=self.last_camera_data)
 
-        # 125/500 hz, robot_receive_timestamp
         last_robot_data = self.robot.get_all_state()
-        # both have more than n_obs_steps data
+
+        print(last_robot_data)
 
         # 30 hz, gripper_receive_timestamp
-        last_gripper_data = self.gripper.get_all_state()
+        # last_gripper_data = self.gripper.get_all_state()
+        last_gripper_data = 0.05
         last_timestamp = self.last_camera_data[0]['timestamp'][-1]
         dt = 1 / self.frequency
 

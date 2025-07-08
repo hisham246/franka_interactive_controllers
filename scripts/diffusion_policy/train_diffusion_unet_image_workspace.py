@@ -1,12 +1,13 @@
-if __name__ == "__main__":
-    import sys
-    import os
-    import pathlib
+# if __name__ == "__main__":
+#     import sys
+#     import os
+#     import pathlib
 
-    ROOT_DIR = str(pathlib.Path(__file__).parent.parent.parent)
-    sys.path.append(ROOT_DIR)
-    os.chdir(ROOT_DIR)
+#     ROOT_DIR = str(pathlib.Path(__file__).parent.parent.parent)
+#     sys.path.append(ROOT_DIR)
+#     os.chdir(ROOT_DIR)
 
+import sys
 import os
 import hydra
 import torch
@@ -20,6 +21,7 @@ import pickle
 import tqdm
 import numpy as np
 import shutil
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from policy_utils.base_workspace import BaseWorkspace
 from diffusion_policy.diffusion_unet_image_policy import DiffusionUnetImagePolicy
 from policy_utils.base_dataset import BaseImageDataset, BaseDataset

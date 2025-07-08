@@ -4,12 +4,6 @@ Run a policy on the real robot.
 
 import sys
 import os
-
-# ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-# sys.path.append(ROOT_DIR)
-# os.chdir(ROOT_DIR)
-
-import os
 import pathlib
 import time
 from multiprocessing.managers import SharedMemoryManager
@@ -24,7 +18,11 @@ import torch
 from omegaconf import OmegaConf
 import json
 
-sys.path.append(os.path.join(os.path.dirname(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR))
+sys.path.insert(0, PROJECT_ROOT)
+
+# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from policy_utils.replay_buffer import ReplayBuffer
 from policy_utils.cv_util import (
@@ -81,6 +79,11 @@ def main(output,
 
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
+
+    cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
+    cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
+    cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
+    cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
 
     # setup experiment
     dt = 1/frequency
