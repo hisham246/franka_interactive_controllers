@@ -4,7 +4,6 @@ from geometry_msgs.msg import PoseStamped, Pose
 from std_srvs.srv import Empty
 from dynamic_reconfigure.client import Client as DynClient
 from sensor_msgs.msg import JointState
-from franka_msgs.msg import FrankaState
 from scipy.spatial.transform import Rotation as R
 import enum
 import time
@@ -41,24 +40,14 @@ class FrankaROSInterface:
         # Subscribers
         self.ee_pose = None
         self.joint_positions = None
-
-        rospy.Subscriber(ee_state_topic, FrankaState, self._ee_pose_callback)
+        rospy.Subscriber(ee_state_topic, Pose, self._ee_pose_callback)
         rospy.Subscriber(joint_state_topic, JointState, self._joint_state_callback)
 
     def _ee_pose_callback(self, msg):
-        pos = np.array([
-            msg.pose.position.x,
-            msg.pose.position.y,
-            msg.pose.position.z
-        ])
-        quat = np.array([
-            msg.pose.orientation.x,
-            msg.pose.orientation.y,
-            msg.pose.orientation.z,
-            msg.pose.orientation.w
-        ])
-        rotvec = R.from_quat(quat).as_rotvec()
-        self.ee_pose = np.concatenate([pos, rotvec])
+        pos = msg.position
+        quat = msg.orientation
+        rotvec = R.from_quat([quat.x, quat.y, quat.z, quat.w]).as_rotvec()
+        self.ee_pose = np.array([pos.x, pos.y, pos.z, *rotvec])
 
     def _joint_state_callback(self, msg):
         self.joint_positions = np.array(msg.position)
@@ -247,85 +236,101 @@ class FrankaVariableImpedanceController(mp.Process):
         return self.ring_buffer.get_all()
 
     def run(self):
-        if self.soft_real_time:
-            os.sched_setscheduler(0, os.SCHED_RR, os.sched_param(20))
+        rospy.init_node("franka_variable_impedance_controller", anonymous=True)
+        # if self.soft_real_time:
+        #     os.sched_setscheduler(0, os.SCHED_RR, os.sched_param(20))
 
         robot = FrankaROSInterface()
 
-        dt = 1. / self.frequency
-        curr_pose = robot.get_ee_pose()
-        curr_t = time.monotonic()
-        last_waypoint_time = curr_t
-        pose_interp = PoseTrajectoryInterpolator(
-            times=[curr_t],
-            poses=[curr_pose]
-        )
+        while not rospy.is_shutdown() and (robot.ee_pose is None or robot.joint_positions is None):
+            print("[Robot] Waiting for messages...")
+            rospy.sleep(0.1)
 
-        t_start = time.monotonic()
-        iter_idx = 0
-        keep_running = True
-        while keep_running:
-            t_now = time.monotonic()
-            ee_pose = pose_interp(t_now)
-            robot.update_desired_ee_pose(ee_pose)
+        try:
+            dt = 1. / self.frequency
+            curr_pose = robot.get_ee_pose()
+            print("[Robot] Got EE pose:", curr_pose)
+            curr_t = time.monotonic()
+            last_waypoint_time = curr_t
+            pose_interp = PoseTrajectoryInterpolator(
+                times=[curr_t],
+                poses=[curr_pose]
+            )
 
-            state = dict()
-            for key, func_name in self.receive_keys:
-                state[key] = getattr(robot, func_name)()
+            t_start = time.monotonic()
+            iter_idx = 0
 
-            t_recv = time.time()
-            state['robot_receive_timestamp'] = t_recv
-            state['robot_timestamp'] = t_recv - self.receive_latency
-            self.ring_buffer.put(state)
+            rate = rospy.Rate(self.frequency)
+            keep_running = True
 
-            try:
-                commands = self.input_queue.get_k(1)
-                n_cmd = len(commands['cmd'])
-            except Empty:
-                n_cmd = 0
+            while not rospy.is_shutdown() and keep_running:
+                t_now = time.monotonic()
+                
+                # Compute interpolated pose and publish
+                ee_pose = pose_interp(t_now)
+                robot.update_desired_ee_pose(ee_pose)
+                # Read robot state and push to buffer
+                state = dict()
+                for key, func_name in self.receive_keys:
+                    state[key] = getattr(robot, func_name)()
 
-            for i in range(n_cmd):
-                command = {key: val[i] for key, val in commands.items()}
-                cmd = command['cmd']
-                if cmd == Command.STOP.value:
-                    keep_running = False
-                    break
-                elif cmd == Command.SERVOL.value:
-                    target_pose = command['target_pose']
-                    duration = float(command['duration'])
-                    curr_time = t_now + dt
-                    t_insert = curr_time + duration
-                    pose_interp = pose_interp.drive_to_waypoint(
-                        pose=target_pose,
-                        time=t_insert,
-                        curr_time=curr_time
-                    )
-                    last_waypoint_time = t_insert
-                elif cmd == Command.SCHEDULE_WAYPOINT.value:
-                    target_pose = command['target_pose']
-                    target_time = float(command['target_time'])
-                    target_time = time.monotonic() - time.time() + target_time
-                    curr_time = t_now + dt
-                    pose_interp = pose_interp.schedule_waypoint(
-                        pose=target_pose,
-                        time=target_time,
-                        curr_time=curr_time,
-                        last_waypoint_time=last_waypoint_time
-                    )
-                    last_waypoint_time = target_time
-                elif cmd == Command.SET_IMPEDANCE.value:
-                    self.curr_Kx = command['Kx']
-                    self.curr_Kxd = command['Kxd']
-                    robot.update_impedance_gains(self.curr_Kx, self.curr_Kxd)
-                else:
-                    keep_running = False
-                    break
+                t_recv = time.time()
+                state['robot_receive_timestamp'] = t_recv
+                state['robot_timestamp'] = t_recv - self.receive_latency
+                self.ring_buffer.put(state)
 
-            precise_wait(t_start + (iter_idx + 1) * dt, time_func=time.monotonic)
-            if iter_idx == 0:
-                self.ready_event.set()
-            iter_idx += 1
+                # Process commands
+                try:
+                    commands = self.input_queue.get_k(1)
+                    n_cmd = len(commands['cmd'])
+                except Empty:
+                    n_cmd = 0
 
-        robot.terminate_policy()
-        del robot
-        self.ready_event.set()
+                for i in range(n_cmd):
+                    command = {key: val[i] for key, val in commands.items()}
+                    cmd = command['cmd']
+                    if cmd == Command.STOP.value:
+                        keep_running = False
+                        break
+                    elif cmd == Command.SERVOL.value:
+                        target_pose = command['target_pose']
+                        duration = float(command['duration'])
+                        curr_time = t_now + (1. / self.frequency)
+                        t_insert = curr_time + duration
+                        pose_interp = pose_interp.drive_to_waypoint(
+                            pose=target_pose,
+                            time=t_insert,
+                            curr_time=curr_time
+                        )
+                        last_waypoint_time = t_insert
+                    elif cmd == Command.SCHEDULE_WAYPOINT.value:
+                        target_pose = command['target_pose']
+                        target_time = float(command['target_time'])
+                        target_time = time.monotonic() - time.time() + target_time
+                        curr_time = t_now + (1. / self.frequency)
+                        pose_interp = pose_interp.schedule_waypoint(
+                            pose=target_pose,
+                            time=target_time,
+                            curr_time=curr_time,
+                            last_waypoint_time=last_waypoint_time
+                        )
+                        last_waypoint_time = target_time
+                    elif cmd == Command.SET_IMPEDANCE.value:
+                        self.curr_Kx = command['Kx']
+                        self.curr_Kxd = command['Kxd']
+                        robot.update_impedance_gains(self.curr_Kx, self.curr_Kxd)
+                    else:
+                        keep_running = False
+                        break
+
+                t_wait_until = t_start + (iter_idx + 1) * dt
+                precise_wait(t_wait_until, time_func=time.monotonic)
+                iter_idx += 1
+
+
+        finally:
+            # mandatory cleanup
+            # terminate
+            robot.terminate_policy()
+            del robot
+            self.ready_event.set()

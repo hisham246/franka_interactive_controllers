@@ -255,7 +255,7 @@ class VicUmiEnv:
     # ======== start-stop API =============
     @property
     def is_ready(self):
-        return self.camera.is_ready and self.robot.is_ready
+        return self.camera.is_ready and self.robot.is_ready and self.gripper.is_ready
     
     def start(self, wait=True):
         self.camera.start(wait=False)
@@ -300,24 +300,52 @@ class VicUmiEnv:
         """
 
         "observation dict"
-        assert self.is_ready
+
+        # timeout_sec = 10
+        # t0 = time.time()
+        # while not self.is_ready:
+        #     if self.start_time is not None and time.time() - self.start_time > timeout_sec:
+        #         raise TimeoutError("[VicUmiEnv] Timeout: robot, camera, or gripper not ready after 10 seconds.")
+        #     print("[VicUmiEnv] Waiting for system to be ready...")
+        #     time.sleep(0.05)
+        
+        # assert self.is_ready
+
+        # if not self.is_ready:
+        #     print("Waiting for system to become ready...")
+        #     start = time.time()
+        #     while not self.is_ready and time.time() - start < 10:
+        #         time.sleep(0.05)
+        #     if not self.is_ready:
+        #         raise RuntimeError("System not ready after timeout.")
+
+        # # Wait for camera frames to arrive
+        # camera_ready = False
+        # for _ in range(100):  # try for 5 seconds max
+        #     data = self.camera.get(k=1)
+        #     if data is not None and len(data[0]['color']) > 0:
+        #         camera_ready = True
+        #         break
+        #     time.sleep(0.1)
+
+        # if not camera_ready:
+        #     raise RuntimeError("Camera data not received in time.")
+
 
         # get data
         # 60 Hz, camera_calibrated_timestamp
         k = math.ceil(
             self.camera_obs_horizon * self.camera_down_sample_steps \
             * (60 / self.frequency))
-        
+                
         self.last_camera_data = self.camera.get(
             k=k, 
             out=self.last_camera_data)
 
         last_robot_data = self.robot.get_all_state()
 
-        print(last_robot_data)
-
         # 30 hz, gripper_receive_timestamp
-        # last_gripper_data = self.gripper.get_all_state()
+        last_gripper_data = self.gripper.get_all_state()
         last_gripper_data = 0.05
         last_timestamp = self.last_camera_data[0]['timestamp'][-1]
         dt = 1 / self.frequency

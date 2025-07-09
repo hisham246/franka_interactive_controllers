@@ -177,12 +177,12 @@ def main(output, gripper_ip, gripper_port,
             obs_pose_rep = cfg.task.pose_repr.obs_pose_repr
             action_pose_repr = cfg.task.pose_repr.action_pose_repr
 
-
             device = torch.device('cuda')
             policy.eval().to(device)
 
             print("Warming up policy inference")
-            obs = env.get_obs()            
+            obs = env.get_obs()
+            print("Observation", obs)           
             episode_start_pose = np.concatenate([
                     obs[f'robot0_eef_pos'],
                     obs[f'robot0_eef_rot_axis_angle']
@@ -198,11 +198,11 @@ def main(output, gripper_ip, gripper_port,
                     lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                 result = policy.predict_action(obs_dict)
                 action = result['action_pred'][0].detach().to('cpu').numpy()
-                assert action.shape[-1] == 16
-                # assert action.shape[-1] == 10
-                action = get_real_umi_action(action, obs, action_pose_repr)
+                # assert action.shape[-1] == 16
                 assert action.shape[-1] == 10
-                # assert action.shape[-1] == 7
+                action = get_real_umi_action(action, obs, action_pose_repr)
+                # assert action.shape[-1] == 10
+                assert action.shape[-1] == 7
                 del result
 
             print('Ready!')
@@ -236,7 +236,7 @@ def main(output, gripper_ip, gripper_port,
 
                         # get obs
                         obs = env.get_obs()
-                        # print("Observations:", obs)
+                        print("Observations:", obs)
                         episode_start_pose = np.concatenate([
                             obs[f'robot0_eef_pos'],
                             obs[f'robot0_eef_rot_axis_angle']
@@ -276,17 +276,6 @@ def main(output, gripper_ip, gripper_port,
                                                    'ee_rot_0': a[3],
                                                    'ee_rot_1': a[4],
                                                    'ee_rot_2': a[5]})
-                                
-                                action_log.append({'timestamp': t, 
-                                                   'ee_pos_0': a[0],
-                                                   'ee_pos_1': a[1],
-                                                   'ee_pos_2': a[2],
-                                                   'ee_rot_0': a[3],
-                                                   'ee_rot_1': a[4],
-                                                   'ee_rot_2': a[5],
-                                                   'ee_Kx_0': a[6],
-                                                   'ee_Kx_1': a[7],
-                                                   'ee_Kx_2': a[8]})
 
                         action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                         
