@@ -1,7 +1,7 @@
 """
 Run a policy on the real robot.
 """
-
+import rospy
 import sys
 import os
 import pathlib
@@ -40,9 +40,84 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
                                                 get_real_umi_obs_dict,
                                                 get_real_umi_action)
 import pandas as pd
+from geometry_msgs.msg import PoseStamped, Pose
+from sensor_msgs.msg import JointState
+from dynamic_reconfigure.client import Client as DynClient
+from scipy.spatial.transform import Rotation as R
+import traceback
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
+class FrankaROSInterface:
+    def __init__(self,
+                 pose_topic='/cartesian_impedance_controller/desired_pose',
+                 impedance_config_ns='/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node',
+                 ee_state_topic='/franka_state_controller/ee_pose',
+                 joint_state_topic='/joint_states'):
+        
+        # if ros_init and not rospy.core.is_initialized():
+        #     rospy.init_node("franka_ros_interface_node", anonymous=True)
+
+        self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
+        self.dyn_client = DynClient(impedance_config_ns)
+
+        self.ee_pose = None
+        self.joint_positions = None
+        rospy.Subscriber(ee_state_topic, Pose, self._ee_pose_callback)
+        rospy.Subscriber(joint_state_topic, JointState, self._joint_state_callback)
+
+    def _ee_pose_callback(self, msg):
+        pos = msg.position
+        quat = msg.orientation
+        rotvec = R.from_quat([quat.x, quat.y, quat.z, quat.w]).as_rotvec()
+        self.ee_pose = np.concatenate([np.array([pos.x, pos.y, pos.z]), np.array([*rotvec])])
+        # print("hi1")
+
+    def _joint_state_callback(self, msg):
+        self.joint_positions = np.array(msg.position)
+        # print("hi2")
+
+
+    def get_ee_pose(self):
+        while self.ee_pose is None and not rospy.is_shutdown():
+            rospy.sleep(0.01)
+        return self.ee_pose
+
+    def get_joint_positions(self):
+        while self.joint_positions is None and not rospy.is_shutdown():
+            rospy.sleep(0.01)
+        return self.joint_positions
+
+    def update_desired_ee_pose(self, pose: np.ndarray):
+        msg = PoseStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = 'panda_link0'
+        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = pose[:3]
+        quat = R.from_rotvec(pose[3:]).as_quat()
+        msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = quat
+        self.pose_pub.publish(msg)
+
+    def update_impedance_gains(self, Kx: np.ndarray, Kxd: np.ndarray):
+        config = {
+            'translational_stiffness_x': Kx[0],
+            'translational_stiffness_y': Kx[1],
+            'translational_stiffness_z': Kx[2],
+            'rotational_stiffness_x': Kx[3],
+            'rotational_stiffness_y': Kx[4],
+            'rotational_stiffness_z': Kx[5],
+            'translational_damping_x': Kxd[0],
+            'translational_damping_y': Kxd[1],
+            'translational_damping_z': Kxd[2],
+            'rotational_damping_x': Kxd[3],
+            'rotational_damping_y': Kxd[4],
+            'rotational_damping_z': Kxd[5],
+        }
+        self.dyn_client.update_configuration(config)
+
+    def terminate_policy(self):
+        rospy.loginfo("[FrankaROSInterface] Terminating policy...")
+
+        
 @click.command()
 @click.option('--output', '-o', required=True, help='Directory to save recording')
 @click.option('--gripper_ip', default='129.97.71.27')
@@ -62,11 +137,16 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--mirror_swap', is_flag=True, default=False)
 @click.option('--temporal_ensembling', is_flag=True, default=True, help='Enable temporal ensembling for inference.')
 
+
 def main(output, gripper_ip, gripper_port,
     match_dataset, match_camera, vis_camera_idx, 
     steps_per_inference, max_duration,
     frequency, no_mirror, sim_fov, camera_intrinsics, 
     mirror_crop, mirror_swap, temporal_ensembling):
+            
+    rospy.init_node("exec_policy_node", anonymous=True)
+
+    robot_interface = FrankaROSInterface()
 
     # Diffusion Transformer
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
@@ -106,6 +186,7 @@ def main(output, gripper_ip, gripper_port,
         with KeystrokeCounter() as key_counter, \
             VicUmiEnv(
                 output_dir=output,
+                robot_interface=robot_interface,
                 gripper_ip=gripper_ip,
                 gripper_port=gripper_port, 
                 frequency=frequency,
@@ -137,6 +218,7 @@ def main(output, gripper_ip, gripper_port,
                 max_pos_speed=1.5,
                 max_rot_speed=2.0,
                 shm_manager=shm_manager) as env:
+            
             cv2.setNumThreads(2)
             print("Waiting for camera")
             time.sleep(1.0)
@@ -180,9 +262,25 @@ def main(output, gripper_ip, gripper_port,
             device = torch.device('cuda')
             policy.eval().to(device)
 
+            # import pdb; pdb.set_trace()
+            
             print("Warming up policy inference")
-            obs = env.get_obs()
-            print("Observation", obs)           
+            print(f"Robot ready? {env.robot.is_ready}")
+            print(f"Camera ready? {env.camera.is_ready}")
+            print(f"Env ready? {env.is_ready}")
+
+            # obs = env.get_obs()
+            while True:
+                try:
+                    obs = env.get_obs()
+                    break
+                except Exception as e:
+                    print("Error during warm-up get_obs():", e)
+                    traceback.print_exc()
+                    return
+            print("stopping now")
+            quit(-1)
+            # print("Observation", obs)           
             episode_start_pose = np.concatenate([
                     obs[f'robot0_eef_pos'],
                     obs[f'robot0_eef_rot_axis_angle']
@@ -207,8 +305,8 @@ def main(output, gripper_ip, gripper_port,
 
             print('Ready!')
 
-            while True:
-                
+            while not rospy.is_shutdown():                
+
                 # ========== policy control loop ==============
                 try:
                     # start episode
@@ -236,7 +334,7 @@ def main(output, gripper_ip, gripper_port,
 
                         # get obs
                         obs = env.get_obs()
-                        print("Observations:", obs)
+                        # print("Observations:", obs)
                         episode_start_pose = np.concatenate([
                             obs[f'robot0_eef_pos'],
                             obs[f'robot0_eef_rot_axis_angle']
@@ -259,7 +357,7 @@ def main(output, gripper_ip, gripper_port,
 
                             # print("Actions", action)
 
-                            print('Inference latency:', time.time() - s)
+                            # print('Inference latency:', time.time() - s)
                             if temporal_ensembling:
                                 for i, a in enumerate(action):
                                     target_step = iter_idx + i
@@ -270,12 +368,12 @@ def main(output, gripper_ip, gripper_port,
                             for a, t in zip(action, obs_timestamps[-1] + dt + np.arange(len(action)) * dt):
                                 a = a.tolist()
                                 action_log.append({'timestamp': t, 
-                                                   'ee_pos_0': a[0],
-                                                   'ee_pos_1': a[1],
-                                                   'ee_pos_2': a[2],
-                                                   'ee_rot_0': a[3],
-                                                   'ee_rot_1': a[4],
-                                                   'ee_rot_2': a[5]})
+                                                    'ee_pos_0': a[0],
+                                                    'ee_pos_1': a[1],
+                                                    'ee_pos_2': a[2],
+                                                    'ee_rot_0': a[3],
+                                                    'ee_rot_1': a[4],
+                                                    'ee_rot_2': a[5]})
 
                         action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                         
@@ -314,29 +412,29 @@ def main(output, gripper_ip, gripper_port,
                             print("No valid actions to submit.")
 
 
-                        # visualize
-                        episode_id = env.replay_buffer.n_episodes
-                        if mirror_crop:
-                            vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
-                            crop_img = obs['camera0_rgb_mirror_crop'][-1]
-                            vis_img = np.concatenate([vis_img, crop_img], axis=1)
-                        else:
-                            vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
-                        text = 'Episode: {}, Time: {:.1f}'.format(
-                            episode_id, time.monotonic() - t_start
-                        )
-                        cv2.putText(
-                            vis_img,
-                            text,
-                            (10,20),
-                            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale=0.5,
-                            thickness=1,
-                            color=(255,255,255)
-                        )
-                        cv2.imshow('default', vis_img[...,::-1])
+                        # # visualize
+                        # episode_id = env.replay_buffer.n_episodes
+                        # if mirror_crop:
+                        #     vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
+                        #     crop_img = obs['camera0_rgb_mirror_crop'][-1]
+                        #     vis_img = np.concatenate([vis_img, crop_img], axis=1)
+                        # else:
+                        #     vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
+                        # text = 'Episode: {}, Time: {:.1f}'.format(
+                        #     episode_id, time.monotonic() - t_start
+                        # )
+                        # cv2.putText(
+                        #     vis_img,
+                        #     text,
+                        #     (10,20),
+                        #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                        #     fontScale=0.5,
+                        #     thickness=1,
+                        #     color=(255,255,255)
+                        # )
+                        # cv2.imshow('default', vis_img[...,::-1])
 
-                        _ = cv2.pollKey()
+                        # _ = cv2.pollKey()
                         press_events = key_counter.get_press_events()
                         stop_episode = False
                         for key_stroke in press_events:
@@ -363,14 +461,17 @@ def main(output, gripper_ip, gripper_port,
                     print("Interrupted!")
                     # stop robot.
                     env.end_episode()
-                    if len(action_log) > 0:
-                        df = pd.DataFrame(action_log)
-                        csv_path = os.path.join(output, f"policy_actions_episode_{episode_id}.csv")
-                        df.to_csv(csv_path, index=False)
-                        print(f"Saved actions to {csv_path}")
-                
+                    # if len(action_log) > 0:
+                    #     df = pd.DataFrame(action_log)
+                    #     # csv_path = os.path.join(output, f"policy_actions_episode_{episode_id}.csv")
+                    #     df.to_csv(csv_path, index=False)
+                    #     print(f"Saved actions to {csv_path}")
+                    
                 print("Stopped.")
 
 # %%
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except rospy.ROSInterruptException:
+        pass

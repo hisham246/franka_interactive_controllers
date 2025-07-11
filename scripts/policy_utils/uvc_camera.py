@@ -228,14 +228,21 @@ class UvcCamera(mp.Process):
             t_start = time.time()
             while not self.stop_event.is_set():
                 ts = time.time()
+                print(f"[UvcCamera] Starting run loop for {self.dev_video_path}")
                 ret = cap.grab()
                 assert ret
-                
+                if not ret:
+                    print(f"[UvcCamera] Failed to grab frame from {self.dev_video_path}")                
+                                
                 # directly write into shared memory to avoid copy
                 frame = self.video_recorder.get_img_buffer()
                 ret, frame = cap.retrieve(frame)
                 t_recv = time.time()
                 assert ret
+                if not ret:
+                    print(f"[UvcCamera] Failed to retrieve frame")
+                else:
+                    print(f"[UvcCamera] Captured frame shape: {frame.shape}")
                 mt_cap = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
                 t_cap = mt_cap - time.monotonic() + time.time()
                 t_cal = t_recv - self.receive_latency # calibrated latency
@@ -289,6 +296,7 @@ class UvcCamera(mp.Process):
                     vis_data = put_data
                 elif self.vis_transform is not None:
                     vis_data = self.vis_transform(dict(data))
+                print("put on camera buffer")
                 self.vis_ring_buffer.put(vis_data, wait=False)
 
                 # perf

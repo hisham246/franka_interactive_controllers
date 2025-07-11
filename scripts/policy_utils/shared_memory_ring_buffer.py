@@ -33,6 +33,7 @@ class SharedMemoryRingBuffer:
         put_desired_frequency: The maximum frequency that .put() can be called.
             This influces the buffer size.
         """
+        self.logfile = open('/dev/shm/shm_log.NAME','w')
 
         # create atomic counter
         counter = SharedAtomicCounter(shm_manager)
@@ -156,6 +157,7 @@ class SharedMemoryRingBuffer:
         # update timestamp
         self.timestamp_array.get()[next_idx] = time.monotonic()
         self.counter.add(1)
+        self.logfile.write(f'{time.time()} put')
 
     def _allocate_empty(self, k=None):
         result = dict()
@@ -188,8 +190,6 @@ class SharedMemoryRingBuffer:
             out = self._allocate_empty(k)
         start_time = time.monotonic()
         count = self.counter.load()
-        # print("K:", k)
-        # print("Count:", count)
         assert k <= count
         curr_idx = (count - 1) % self.buffer_size
         for key, value in self.shared_arrays.items():

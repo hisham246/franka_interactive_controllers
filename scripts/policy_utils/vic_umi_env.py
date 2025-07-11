@@ -1,3 +1,4 @@
+import rospy
 import pathlib
 import numpy as np
 import time
@@ -22,11 +23,24 @@ from policy_utils.cv2_util import (
     get_image_transform, optimal_row_cols)
 from policy_utils.usb_util import reset_all_avermedia_devices, get_sorted_v4l_paths
 from policy_utils.interpolation_util import get_interp1d, PoseInterpolator
+import enum
+
+from policy_utils.shared_memory_queue import (
+    SharedMemoryQueue, Empty)
+from policy_utils.franka_interpolation_controller import Command
+
+class Command(enum.Enum):
+    STOP = 0
+    SERVOL = 1
+    SCHEDULE_WAYPOINT = 2
+    SET_IMPEDANCE = 3
+
 
 class VicUmiEnv:
     def __init__(self, 
             # required params
             output_dir,
+            robot_interface,
             gripper_ip,
             gripper_port=4242,
             # env params
@@ -202,15 +216,27 @@ class VicUmiEnv:
 
         self.replay_buffer = replay_buffer
         self.episode_id_counter = self.replay_buffer.n_episodes
+
+    #     example = {
+    #     'cmd': Command.SERVOL.value,
+    #     'target_pose': np.zeros((6,), dtype=np.float64),
+    #     'duration': 0.0,
+    #     'target_time': 0.0
+    # }
+    #     self.robot_command_queue = SharedMemoryQueue.create_from_examples(
+    #         shm_manager=shm_manager,
+    #         examples=example,
+    #         buffer_size=256
+    #                         )
         
         robot = FrankaVariableImpedanceController(
             shm_manager=shm_manager,
+            robot_interface=robot_interface,
             frequency=1000,
             verbose=False,
             receive_latency=robot_obs_latency,
             output_dir=output_dir,
-            episode_id=self.episode_id_counter,
-        )
+            episode_id=self.episode_id_counter        )
         
         gripper = FrankaHandController(
             host=gripper_ip,
@@ -301,6 +327,10 @@ class VicUmiEnv:
 
         "observation dict"
 
+        # import pdb; pdb.set_trace()
+
+        assert self.is_ready
+
         # timeout_sec = 10
         # t0 = time.time()
         # while not self.is_ready:
@@ -309,7 +339,6 @@ class VicUmiEnv:
         #     print("[VicUmiEnv] Waiting for system to be ready...")
         #     time.sleep(0.05)
         
-        # assert self.is_ready
 
         # if not self.is_ready:
         #     print("Waiting for system to become ready...")
@@ -326,7 +355,7 @@ class VicUmiEnv:
         #     if data is not None and len(data[0]['color']) > 0:
         #         camera_ready = True
         #         break
-        #     time.sleep(0.1)
+        #     time.sleep(1.0)
 
         # if not camera_ready:
         #     raise RuntimeError("Camera data not received in time.")
@@ -338,15 +367,30 @@ class VicUmiEnv:
             self.camera_obs_horizon * self.camera_down_sample_steps \
             * (60 / self.frequency))
                 
+        # retry_limit = 100
+        # for i in range(retry_limit):
+        #     try:
+        #         count = self.camera._cameras[0].ring_buffer.count  # or whichever camera index is used
+        #         print(f"K: {k} | Count: {count}")
+        #         self.last_camera_data = self.camera.get(k=k, out=self.last_camera_data)
+        #         break
+        #     except AssertionError:
+        #         rospy.logwarn(f"[VicUmiEnv] Waiting for camera ring buffer to fill ({i+1}/{retry_limit})...")
+        #         time.sleep(0.05)    
+        
+        print("before camera buffer read")
         self.last_camera_data = self.camera.get(
             k=k, 
             out=self.last_camera_data)
+        print('after camera buffer read')
 
         last_robot_data = self.robot.get_all_state()
 
+        # print("[DEBUG] Retrieved robot state from ring buffer:", last_robot_data.keys())
+        # print("[DEBUG] Sample ActualTCPPose:", last_robot_data['ActualTCPPose'][-1])
+
         # 30 hz, gripper_receive_timestamp
         last_gripper_data = self.gripper.get_all_state()
-        last_gripper_data = 0.05
         last_timestamp = self.last_camera_data[0]['timestamp'][-1]
         dt = 1 / self.frequency
 
@@ -399,7 +443,6 @@ class VicUmiEnv:
                 data={
                     'robot0_eef_pose': last_robot_data['ActualTCPPose'],
                     'robot0_joint_pos': last_robot_data['ActualQ'],
-                    'robot0_joint_vel': last_robot_data['ActualQd'],
                 },
                 timestamps=last_robot_data['robot_timestamp']
             )
@@ -428,6 +471,7 @@ class VicUmiEnv:
         if not isinstance(timestamps, np.ndarray):
             timestamps = np.array(timestamps)
 
+
         # convert action to pose
         receive_time = time.time()
         is_new = timestamps > receive_time
@@ -455,10 +499,17 @@ class VicUmiEnv:
             # Update the impedance gains with Kx and Kxd
             # self.robot.set_impedance(Kx, Kxd)
 
+            # print("Scheduling")
             self.robot.schedule_waypoint(
                 pose=r_actions,
                 target_time=new_timestamps[i]-r_latency
             )
+
+            # self.robot_command_queue.put({
+            #     'cmd': Command.SCHEDULE_WAYPOINT.value,
+            #     'target_pose': r_actions,
+            #     'target_time': new_timestamps[i] - r_latency
+            # })
             self.gripper.schedule_waypoint(
                 pos=g_actions)
 
