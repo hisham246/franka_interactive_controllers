@@ -112,12 +112,19 @@ def get_image_transform(
         c_slice = slice(None, None, -1)
 
     def transform(img: np.ndarray):
+        print("transform entry")
         assert img.shape == ((ih,iw,3))
+        print("Image", img, ih, iw, rh, rw )
+        # print("Image", img)
+        print("Before resize")
         # resize
         img = cv2.resize(img, (rw, rh), interpolation=interp_method)
+        print("After resize")
         # crop
         img = img[h_slice, w_slice, c_slice]
+        print("transform exit")
         return img
+
     return transform
 
 def optimal_row_cols(

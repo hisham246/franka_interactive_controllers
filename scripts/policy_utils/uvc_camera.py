@@ -247,19 +247,25 @@ class UvcCamera(mp.Process):
                 t_cap = mt_cap - time.monotonic() + time.time()
                 t_cal = t_recv - self.receive_latency # calibrated latency
                      
+
+                print("[UvcCamera] Captured the frame already")     
                 # record frame
                 if self.video_recorder.is_ready():
                     self.video_recorder.write_img_buffer(frame, frame_time=t_cal)
 
+                print("[UvcCamera] Verified video recorder is ready and image buffer is written")
+
                 data = dict()
                 data['camera_receive_timestamp'] = t_recv
                 data['camera_capture_timestamp'] = t_cap
-                data['color'] = frame
+                data['color'] = frame.copy()
                 
                 # apply transform
                 put_data = data
                 if self.transform is not None:
                     put_data = self.transform(dict(data))
+
+                print("[UvcCamera] Transforms")     
 
                 if self.put_downsample:                
                     # put frequency regulation
@@ -286,16 +292,28 @@ class UvcCamera(mp.Process):
                     put_data['timestamp'] = t_cal
                     self.ring_buffer.put(put_data, wait=False)
 
+                print("[UvcCamera] Downsampled")     
+
                 # signal ready
                 if iter_idx == 0:
                     self.ready_event.set()
-                    
+                
+                print("[UvcCamera] Ready event set")     
+             
                 # put to vis
                 vis_data = data
                 if self.vis_transform == self.transform:
                     vis_data = put_data
                 elif self.vis_transform is not None:
-                    vis_data = self.vis_transform(dict(data))
+                    # data['color'] = np.zeros(data['color'].shape)
+                    print("Data color shape", data['color'].shape)
+                    print("Data color type", data['color'].dtype)
+                    print("This will lock")
+                    vis_data = cv2.resize(np.zeros((1080, 1920, 3)), (224, 399), interpolation=cv2.INTER_LINEAR)
+                    print("[UvcCamera] Resized manually")
+                    print("[UvcCamera] vis data", vis_data)
+
+                    # vis_data = self.vis_transform(dict(data))
                 print("put on camera buffer")
                 self.vis_ring_buffer.put(vis_data, wait=False)
 
@@ -313,6 +331,7 @@ class UvcCamera(mp.Process):
                     commands = self.command_queue.get_all()
                     n_cmd = len(commands['cmd'])
                 except Empty:
+                    print("[UvcCamera] No commands")
                     n_cmd = 0
 
                 # execute commands
@@ -335,6 +354,7 @@ class UvcCamera(mp.Process):
 
                 iter_idx += 1
         finally:
+            print("[UvcCamera] Stopped running ...")
             self.video_recorder.stop()
             # When everything done, release the capture
             cap.release()

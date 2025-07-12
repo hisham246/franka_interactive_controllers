@@ -300,7 +300,7 @@ class FrankaVariableImpedanceController(mp.Process):
                     print("[Robot] Received commands:", commands)
                     n_cmd = len(commands['cmd'])
                 except Empty:
-                    print("[Robot] No command received.")
+                    # print("[Robot] No command received.")
                     n_cmd = 0
 
                 for i in range(n_cmd):

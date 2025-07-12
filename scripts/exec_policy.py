@@ -1,6 +1,11 @@
 """
 Run a policy on the real robot.
 """
+import multiprocessing as mp
+
+if __name__ == '__main__':
+    mp.set_start_method('fork')
+
 import rospy
 import sys
 import os
@@ -45,6 +50,8 @@ from sensor_msgs.msg import JointState
 from dynamic_reconfigure.client import Client as DynClient
 from scipy.spatial.transform import Rotation as R
 import traceback
+
+
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -219,7 +226,7 @@ def main(output, gripper_ip, gripper_port,
                 max_rot_speed=2.0,
                 shm_manager=shm_manager) as env:
             
-            cv2.setNumThreads(2)
+            cv2.setNumThreads(1)
             print("Waiting for camera")
             time.sleep(1.0)
 
@@ -471,6 +478,7 @@ def main(output, gripper_ip, gripper_port,
 
 # %%
 if __name__ == '__main__':
+    # mp.set_start_method('spawn')
     try:
         main()
     except rospy.ROSInterruptException:

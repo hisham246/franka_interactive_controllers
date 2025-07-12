@@ -186,6 +186,7 @@ class VicUmiEnv:
             ))
 
             def vis_tf(data, input_res=res):
+                print("[VicUmiEnv] vis tf")
                 img = data['color']
                 f = get_image_transform(
                     input_res=input_res,
@@ -194,6 +195,7 @@ class VicUmiEnv:
                 )
                 img = f(img)
                 data['color'] = img
+                print("[VicUmiEnv] Data from vis tf", data)
                 return data
             vis_transform.append(vis_tf)
 
@@ -227,8 +229,10 @@ class VicUmiEnv:
     #         shm_manager=shm_manager,
     #         examples=example,
     #         buffer_size=256
-    #                         )
+    #                
+    #          )
         
+        print("Start impedance controller")
         robot = FrankaVariableImpedanceController(
             shm_manager=shm_manager,
             robot_interface=robot_interface,
@@ -238,6 +242,8 @@ class VicUmiEnv:
             output_dir=output_dir,
             episode_id=self.episode_id_counter        )
         
+
+        print("Start gripper controller")
         gripper = FrankaHandController(
             host=gripper_ip,
             port=gripper_port,
