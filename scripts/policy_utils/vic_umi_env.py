@@ -40,7 +40,7 @@ class VicUmiEnv:
     def __init__(self, 
             # required params
             output_dir,
-            robot_interface,
+            # robot_interface,
             gripper_ip,
             gripper_port=4242,
             # env params
@@ -231,12 +231,13 @@ class VicUmiEnv:
         
         robot = FrankaVariableImpedanceController(
             shm_manager=shm_manager,
-            robot_interface=robot_interface,
+            # robot_interface=robot_interface,
             frequency=1000,
             verbose=False,
             receive_latency=robot_obs_latency,
             output_dir=output_dir,
-            episode_id=self.episode_id_counter        )
+            episode_id=self.episode_id_counter        
+            )
         
         gripper = FrankaHandController(
             host=gripper_ip,
@@ -378,11 +379,11 @@ class VicUmiEnv:
         #         rospy.logwarn(f"[VicUmiEnv] Waiting for camera ring buffer to fill ({i+1}/{retry_limit})...")
         #         time.sleep(0.05)    
         
-        print("before camera buffer read")
+        # print("before camera buffer read")
         self.last_camera_data = self.camera.get(
             k=k, 
             out=self.last_camera_data)
-        print('after camera buffer read')
+        # print('after camera buffer read')
 
         last_robot_data = self.robot.get_all_state()
 
@@ -441,8 +442,8 @@ class VicUmiEnv:
         if self.obs_accumulator is not None:
             self.obs_accumulator.put(
                 data={
-                    'robot0_eef_pose': last_robot_data['ActualTCPPose'],
-                    'robot0_joint_pos': last_robot_data['ActualQ'],
+                    'robot0_eef_pose': last_robot_data['ActualTCPPose']
+                    # 'robot0_joint_pos': last_robot_data['ActualQ'],
                 },
                 timestamps=last_robot_data['robot_timestamp']
             )
@@ -504,12 +505,6 @@ class VicUmiEnv:
                 pose=r_actions,
                 target_time=new_timestamps[i]-r_latency
             )
-
-            # self.robot_command_queue.put({
-            #     'cmd': Command.SCHEDULE_WAYPOINT.value,
-            #     'target_pose': r_actions,
-            #     'target_time': new_timestamps[i] - r_latency
-            # })
             self.gripper.schedule_waypoint(
                 pos=g_actions)
 
@@ -539,10 +534,13 @@ class VicUmiEnv:
         this_video_dir.mkdir(parents=True, exist_ok=True)
         n_cameras = 1
         video_paths = list()
+        print("This video dir:", this_video_dir)
         for i in range(n_cameras):
-            video_paths.append(
-                str(this_video_dir.joinpath(f'{i}.mp4').absolute()))
-        
+            video_paths.append(str(this_video_dir.joinpath(f'{i}.mp4').absolute()))
+            print("Last video path:", video_paths[-1])
+            # video_path = this_video_dir
+            # video_paths.append(str(video_path.absolute()))
+
         # start recording on camera
         self.camera.restart_put(start_time=start_time)
         self.camera.start_recording(video_path=video_paths[0], start_time=start_time)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 
 import rospy
 import time
@@ -76,7 +76,7 @@ def main():
     command_latency = dt / 2
 
     # Publisher for Cartesian pose
-    pose_pub = rospy.Publisher('/cartesian_impedance_controller/desired_pose', PoseStamped, queue_size=1)
+    pose_pub = rospy.Publisher('/cartesian_pose_impedance_controller/desired_pose', PoseStamped, queue_size=1)
     rospy.loginfo("ROS publisher ready.")
 
     # Dynamic Reconfigure Client for stiffness updates
@@ -185,7 +185,6 @@ def main():
 
             precise_wait(t_cycle_end)
             iter_idx += 1
-
 
 if __name__ == '__main__':
     try:

@@ -11,6 +11,7 @@ from policy_utils.shared_memory_ring_buffer import SharedMemoryRingBuffer
 from policy_utils.shared_memory_queue import SharedMemoryQueue, Full, Empty
 from policy_utils.video_recorder import VideoRecorder
 from policy_utils.usb_util import reset_usb_device
+import copy
 
 class Command(enum.Enum):
     RESTART_PUT = 0
@@ -53,6 +54,7 @@ class UvcCamera(mp.Process):
         
         # create ring buffer
         resolution = tuple(resolution)
+        # print("Resolution", resolution)
         shape = resolution[::-1]
         examples = {
             'color': np.empty(
@@ -62,11 +64,20 @@ class UvcCamera(mp.Process):
         examples['camera_receive_timestamp'] = 0.0
         examples['timestamp'] = 0.0
         examples['step_idx'] = 0
+ 
+        vis_examples = copy.deepcopy(examples)
+
+        if vis_transform is not None:
+            vis_shape = (720, 960, 3)
+        else:
+            vis_shape = shape + (3,)
+        vis_examples["color"] = np.empty(shape=vis_shape, dtype=np.uint8)
 
         vis_ring_buffer = SharedMemoryRingBuffer.create_from_examples(
             shm_manager=shm_manager,
-            examples=examples if vis_transform is None 
-                else vis_transform(dict(examples)),
+            # examples=examples if vis_transform is None 
+            #     else vis_transform(dict(examples)),
+            examples=vis_examples,
             get_max_k=1,
             get_time_budget=0.2,
             put_desired_frequency=capture_fps
@@ -178,14 +189,15 @@ class UvcCamera(mp.Process):
         return self.vis_ring_buffer.get(out=out)
 
     def start_recording(self, video_path: str, start_time: float=-1):
-        path_len = len(video_path.encode('utf-8'))
-        if path_len > self.MAX_PATH_LENGTH:
-            raise RuntimeError('video_path too long.')
-        self.command_queue.put({
-            'cmd': Command.START_RECORDING.value,
-            'video_path': video_path,
-            'recording_start_time': start_time
-        })
+        # path_len = len(video_path.encode('utf-8'))
+        # if path_len > self.MAX_PATH_LENGTH:
+        #     raise RuntimeError('video_path too long.')
+        # self.command_queue.put({
+        #     'cmd': Command.START_RECORDING.value,
+        #     'video_path': video_path,
+        #     'recording_start_time': start_time
+        # })
+        pass
         
     def stop_recording(self):
         self.command_queue.put({
@@ -228,21 +240,21 @@ class UvcCamera(mp.Process):
             t_start = time.time()
             while not self.stop_event.is_set():
                 ts = time.time()
-                print(f"[UvcCamera] Starting run loop for {self.dev_video_path}")
+                # print(f"[UvcCamera] Starting run loop for {self.dev_video_path}")
                 ret = cap.grab()
                 assert ret
-                if not ret:
-                    print(f"[UvcCamera] Failed to grab frame from {self.dev_video_path}")                
+                # if not ret:
+                #     print(f"[UvcCamera] Failed to grab frame from {self.dev_video_path}")                
                                 
                 # directly write into shared memory to avoid copy
                 frame = self.video_recorder.get_img_buffer()
                 ret, frame = cap.retrieve(frame)
                 t_recv = time.time()
                 assert ret
-                if not ret:
-                    print(f"[UvcCamera] Failed to retrieve frame")
-                else:
-                    print(f"[UvcCamera] Captured frame shape: {frame.shape}")
+                # if not ret:
+                #     print(f"[UvcCamera] Failed to retrieve frame")
+                # else:
+                #     print(f"[UvcCamera] Captured frame shape: {frame.shape}")
                 mt_cap = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
                 t_cap = mt_cap - time.monotonic() + time.time()
                 t_cal = t_recv - self.receive_latency # calibrated latency
@@ -251,10 +263,12 @@ class UvcCamera(mp.Process):
                 if self.video_recorder.is_ready():
                     self.video_recorder.write_img_buffer(frame, frame_time=t_cal)
 
+
                 data = dict()
                 data['camera_receive_timestamp'] = t_recv
                 data['camera_capture_timestamp'] = t_cap
-                data['color'] = frame
+                # data['color'] = copy.deepcopy(frame)
+                data['color'] = frame.copy()
                 
                 # apply transform
                 put_data = data
@@ -296,8 +310,9 @@ class UvcCamera(mp.Process):
                     vis_data = put_data
                 elif self.vis_transform is not None:
                     vis_data = self.vis_transform(dict(data))
-                print("put on camera buffer")
+                # print("put on camera buffer")
                 self.vis_ring_buffer.put(vis_data, wait=False)
+                # print("[UvcCamera] After camera put into buffer")
 
                 # perf
                 t_end = time.time()

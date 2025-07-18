@@ -9,7 +9,6 @@ import time
 from multiprocessing.managers import SharedMemoryManager
 
 import av
-import click
 import cv2
 import dill
 import hydra
@@ -39,114 +38,30 @@ from policy_utils.keystroke_counter import (
 from policy_utils.real_inference_util import (get_real_obs_resolution,
                                                 get_real_umi_obs_dict,
                                                 get_real_umi_action)
-import pandas as pd
-from geometry_msgs.msg import PoseStamped, Pose
-from sensor_msgs.msg import JointState
-from dynamic_reconfigure.client import Client as DynClient
-from scipy.spatial.transform import Rotation as R
-import traceback
+
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-class FrankaROSInterface:
-    def __init__(self,
-                 pose_topic='/cartesian_impedance_controller/desired_pose',
-                 impedance_config_ns='/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node',
-                 ee_state_topic='/franka_state_controller/ee_pose',
-                 joint_state_topic='/joint_states'):
-        
-        # if ros_init and not rospy.core.is_initialized():
-        #     rospy.init_node("franka_ros_interface_node", anonymous=True)
-
-        self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
-        self.dyn_client = DynClient(impedance_config_ns)
-
-        self.ee_pose = None
-        self.joint_positions = None
-        rospy.Subscriber(ee_state_topic, Pose, self._ee_pose_callback)
-        rospy.Subscriber(joint_state_topic, JointState, self._joint_state_callback)
-
-    def _ee_pose_callback(self, msg):
-        pos = msg.position
-        quat = msg.orientation
-        rotvec = R.from_quat([quat.x, quat.y, quat.z, quat.w]).as_rotvec()
-        self.ee_pose = np.concatenate([np.array([pos.x, pos.y, pos.z]), np.array([*rotvec])])
-        # print("hi1")
-
-    def _joint_state_callback(self, msg):
-        self.joint_positions = np.array(msg.position)
-        # print("hi2")
-
-
-    def get_ee_pose(self):
-        while self.ee_pose is None and not rospy.is_shutdown():
-            rospy.sleep(0.01)
-        return self.ee_pose
-
-    def get_joint_positions(self):
-        while self.joint_positions is None and not rospy.is_shutdown():
-            rospy.sleep(0.01)
-        return self.joint_positions
-
-    def update_desired_ee_pose(self, pose: np.ndarray):
-        msg = PoseStamped()
-        msg.header.stamp = rospy.Time.now()
-        msg.header.frame_id = 'panda_link0'
-        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = pose[:3]
-        quat = R.from_rotvec(pose[3:]).as_quat()
-        msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = quat
-        self.pose_pub.publish(msg)
-
-    def update_impedance_gains(self, Kx: np.ndarray, Kxd: np.ndarray):
-        config = {
-            'translational_stiffness_x': Kx[0],
-            'translational_stiffness_y': Kx[1],
-            'translational_stiffness_z': Kx[2],
-            'rotational_stiffness_x': Kx[3],
-            'rotational_stiffness_y': Kx[4],
-            'rotational_stiffness_z': Kx[5],
-            'translational_damping_x': Kxd[0],
-            'translational_damping_y': Kxd[1],
-            'translational_damping_z': Kxd[2],
-            'rotational_damping_x': Kxd[3],
-            'rotational_damping_y': Kxd[4],
-            'rotational_damping_z': Kxd[5],
-        }
-        self.dyn_client.update_configuration(config)
-
-    def terminate_policy(self):
-        rospy.loginfo("[FrankaROSInterface] Terminating policy...")
-
-        
-@click.command()
-@click.option('--output', '-o', required=True, help='Directory to save recording')
-@click.option('--gripper_ip', default='129.97.71.27')
-@click.option('--gripper_port', type=int, default=4242)
-# @click.option('--gripper_force', type=float, default=20.0)
-@click.option('--match_camera', '-mc', default=0, type=int)
-@click.option('--match_dataset', '-m', default=None, help='Dataset used to overlay and adjust initial condition')
-@click.option('--vis_camera_idx', default=0, type=int, help="Which RealSense camera to visualize.")
-# @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
-@click.option('--steps_per_inference', '-si', default= 1, type=int, help="Action horizon for inference.")
-@click.option('--max_duration', '-md', default=60, help='Max duration for each epoch in seconds.')
-@click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
-@click.option('-nm', '--no_mirror', is_flag=True, default=False)
-@click.option('-sf', '--sim_fov', type=float, default=None)
-@click.option('-ci', '--camera_intrinsics', type=str, default=None)
-@click.option('--mirror_crop', is_flag=True, default=False)
-@click.option('--mirror_swap', is_flag=True, default=False)
-@click.option('--temporal_ensembling', is_flag=True, default=True, help='Enable temporal ensembling for inference.')
-
-
-def main(output, gripper_ip, gripper_port,
-    match_dataset, match_camera, vis_camera_idx, 
-    steps_per_inference, max_duration,
-    frequency, no_mirror, sim_fov, camera_intrinsics, 
-    mirror_crop, mirror_swap, temporal_ensembling):
+def main():
+    output = 'test'
+    gripper_ip = '129.97.71.27'
+    gripper_port = 4242
+    match_dataset = None
+    match_camera = 0
+    steps_per_inference = 1
+    max_duration = 120
+    frequency = 10.0
+    no_mirror = False
+    sim_fov = None
+    camera_intrinsics = None
+    mirror_crop = False
+    mirror_swap = False
+    temporal_ensembling = True 
             
-    rospy.init_node("exec_policy_node", anonymous=True)
+    # rospy.init_node("exec_policy_node")
 
-    robot_interface = FrankaROSInterface()
+    # robot_interface = FrankaROSInterface()
+    # rospy.sleep(0.2)
 
     # Diffusion Transformer
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
@@ -186,7 +101,7 @@ def main(output, gripper_ip, gripper_port,
         with KeystrokeCounter() as key_counter, \
             VicUmiEnv(
                 output_dir=output,
-                robot_interface=robot_interface,
+                # robot_interface=robot_interface,
                 gripper_ip=gripper_ip,
                 gripper_port=gripper_port, 
                 frequency=frequency,
@@ -269,17 +184,15 @@ def main(output, gripper_ip, gripper_port,
             print(f"Camera ready? {env.camera.is_ready}")
             print(f"Env ready? {env.is_ready}")
 
-            # obs = env.get_obs()
-            while True:
-                try:
-                    obs = env.get_obs()
-                    break
-                except Exception as e:
-                    print("Error during warm-up get_obs():", e)
-                    traceback.print_exc()
-                    return
-            print("stopping now")
-            quit(-1)
+            obs = env.get_obs()
+            # while True:
+            #     try:
+            #         obs = env.get_obs()
+            #         break
+            #     except Exception as e:
+            #         print("Error during warm-up get_obs():", e)
+            #         traceback.print_exc()
+            #         return
             # print("Observation", obs)           
             episode_start_pose = np.concatenate([
                     obs[f'robot0_eef_pos'],
@@ -305,8 +218,7 @@ def main(output, gripper_ip, gripper_port,
 
             print('Ready!')
 
-            while not rospy.is_shutdown():                
-
+            while  not rospy.is_shutdown():                
                 # ========== policy control loop ==============
                 try:
                     # start episode
@@ -402,6 +314,7 @@ def main(output, gripper_ip, gripper_port,
 
                         # Final execution
                         if len(this_target_poses) > 0:
+                            print("Executing actions")
                             env.exec_actions(
                                 actions=np.stack(this_target_poses),
                                 timestamps=np.array(action_timestamps),
@@ -471,7 +384,6 @@ def main(output, gripper_ip, gripper_port,
 
 # %%
 if __name__ == '__main__':
-    try:
-        main()
-    except rospy.ROSInterruptException:
-        pass
+    main()
+    # except rospy.ROSInterruptException:
+    #     pass

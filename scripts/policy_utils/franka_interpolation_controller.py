@@ -1,10 +1,5 @@
 import rospy
 import numpy as np
-from geometry_msgs.msg import PoseStamped, Pose
-from std_srvs.srv import Empty
-from dynamic_reconfigure.client import Client as DynClient
-from sensor_msgs.msg import JointState
-from scipy.spatial.transform import Rotation as R
 import enum
 import time
 import os
@@ -13,12 +8,14 @@ from policy_utils.shared_memory_queue import (
 from policy_utils.shared_memory_ring_buffer import SharedMemoryRingBuffer
 from policy_utils.pose_trajectory_interpolator import PoseTrajectoryInterpolator
 from policy_utils.precise_sleep import precise_wait
-# from policy_utils.franka_ros_interface import FrankaROSInterface
 from multiprocessing.managers import SharedMemoryManager
 import pathlib
 import multiprocessing as mp
 import traceback
-import threading
+from geometry_msgs.msg import PoseStamped, Pose
+from sensor_msgs.msg import JointState
+from dynamic_reconfigure.client import Client as DynClient
+from scipy.spatial.transform import Rotation as R
 
 class Command(enum.Enum):
     STOP = 0
@@ -26,76 +23,76 @@ class Command(enum.Enum):
     SCHEDULE_WAYPOINT = 2
     SET_IMPEDANCE = 3
 
-
-# class FrankaROSInterface:
-#     def __init__(self,
-#                  pose_topic='/cartesian_impedance_controller/desired_pose',
-#                  impedance_config_ns='/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node',
-#                  ee_state_topic='/franka_state_controller/ee_pose',
-#                  joint_state_topic='/joint_states'):
+class FrankaROSInterface:
+    def __init__(self,
+                 pose_topic='/cartesian_pose_impedance_controller/desired_pose',
+                 impedance_config_ns='/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node',
+                 ee_state_topic='/franka_state_controller/ee_pose',
+                 joint_state_topic='/joint_states'):
         
+        self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
+        self.dyn_client = DynClient(impedance_config_ns)
 
-#         self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
-#         self.dyn_client = DynClient(impedance_config_ns)
+        self.ee_pose = None
+        self.joint_positions = None
+        rospy.Subscriber(ee_state_topic, Pose, self._ee_pose_callback)
+        rospy.Subscriber(joint_state_topic, JointState, self._joint_state_callback)
 
-#         self.ee_pose = None
-#         self.joint_positions = None
-#         rospy.Subscriber(ee_state_topic, Pose, self._ee_pose_callback)
-#         rospy.Subscriber(joint_state_topic, JointState, self._joint_state_callback)
+    def _ee_pose_callback(self, msg):
+        pos = msg.position
+        quat = msg.orientation
+        rotvec = R.from_quat([quat.x, quat.y, quat.z, quat.w]).as_rotvec()
+        self.ee_pose = np.concatenate([np.array([pos.x, pos.y, pos.z]), np.array([*rotvec])])
 
-#     def _ee_pose_callback(self, msg):
-#         pos = msg.position
-#         quat = msg.orientation
-#         rotvec = R.from_quat([quat.x, quat.y, quat.z, quat.w]).as_rotvec()
-#         self.ee_pose = np.concatenate([np.array([pos.x, pos.y, pos.z]), np.array([*rotvec])])
-
-#     def _joint_state_callback(self, msg):
-#         self.joint_positions = np.array(msg.position)
+    def _joint_state_callback(self, msg):
+        self.joint_positions = np.array(msg.position)
 
 
-#     def get_ee_pose(self):
-#         while self.ee_pose is None and not rospy.is_shutdown():
-#             rospy.sleep(0.01)
-#         return self.ee_pose
+    def get_ee_pose(self):
+        while self.ee_pose is None and not rospy.is_shutdown():
+            rospy.sleep(0.01)
+        return self.ee_pose
 
-#     def get_joint_positions(self):
-#         while self.joint_positions is None and not rospy.is_shutdown():
-#             rospy.sleep(0.01)
-#         return self.joint_positions
+    def get_joint_positions(self):
+        while self.joint_positions is None and not rospy.is_shutdown():
+            rospy.sleep(0.01)
+        return self.joint_positions
 
-#     def update_desired_ee_pose(self, pose: np.ndarray):
-#         msg = PoseStamped()
-#         msg.header.stamp = rospy.Time.now()
-#         msg.header.frame_id = 'panda_link0'
-#         msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = pose[:3]
-#         quat = R.from_rotvec(pose[3:]).as_quat()
-#         msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = quat
-#         self.pose_pub.publish(msg)
+    def update_desired_ee_pose(self, pose: np.ndarray):
+        msg = PoseStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = 'panda_link0'
+        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = pose[:3]
+        # print("Desired pose:", pose)
+        quat = R.from_rotvec(pose[3:]).as_quat()
+        msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = quat
+        # print("Publishing desired pose:", msg)
+        self.pose_pub.publish(msg)
 
-#     def update_impedance_gains(self, Kx: np.ndarray, Kxd: np.ndarray):
-#         config = {
-#             'translational_stiffness_x': Kx[0],
-#             'translational_stiffness_y': Kx[1],
-#             'translational_stiffness_z': Kx[2],
-#             'rotational_stiffness_x': Kx[3],
-#             'rotational_stiffness_y': Kx[4],
-#             'rotational_stiffness_z': Kx[5],
-#             'translational_damping_x': Kxd[0],
-#             'translational_damping_y': Kxd[1],
-#             'translational_damping_z': Kxd[2],
-#             'rotational_damping_x': Kxd[3],
-#             'rotational_damping_y': Kxd[4],
-#             'rotational_damping_z': Kxd[5],
-#         }
-#         self.dyn_client.update_configuration(config)
-
-#     def terminate_policy(self):
-#         rospy.loginfo("[FrankaROSInterface] Terminating policy...")
+    def update_impedance_gains(self, Kx: np.ndarray, Kxd: np.ndarray):
+        config = {
+            'translational_stiffness_x': Kx[0],
+            'translational_stiffness_y': Kx[1],
+            'translational_stiffness_z': Kx[2],
+            'rotational_stiffness_x': Kx[3],
+            'rotational_stiffness_y': Kx[4],
+            'rotational_stiffness_z': Kx[5],
+            'translational_damping_x': Kxd[0],
+            'translational_damping_y': Kxd[1],
+            'translational_damping_z': Kxd[2],
+            'rotational_damping_x': Kxd[3],
+            'rotational_damping_y': Kxd[4],
+            'rotational_damping_z': Kxd[5],
+        }
+        self.dyn_client.update_configuration(config)
+    
+    def terminate_policy(self):
+        rospy.loginfo("[FrankaROSInterface] Terminating policy...")
 
 class FrankaVariableImpedanceController(mp.Process):
     def __init__(self,
         shm_manager: SharedMemoryManager,
-        robot_interface=None,
+        # robot_interface=None,
         frequency=1000,
         launch_timeout=3,
         joints_init=None,
@@ -110,7 +107,7 @@ class FrankaVariableImpedanceController(mp.Process):
 
         super().__init__(name="FrankaVariableImpedanceController")
         # self.daemon = True
-        self.robot_interface = robot_interface
+        # self.robot_interface = robot_interface
         self.frequency = frequency
         self.launch_timeout = launch_timeout
         self.joints_init = joints_init
@@ -142,8 +139,8 @@ class FrankaVariableImpedanceController(mp.Process):
 
 
         receive_keys = [
-            ('ActualTCPPose', 'get_ee_pose'),
-            ('ActualQ', 'get_joint_positions'),
+            ('ActualTCPPose', 'get_ee_pose')
+            # ('ActualQ', 'get_joint_positions'),
         ]
         
         example = dict()
@@ -253,7 +250,8 @@ class FrankaVariableImpedanceController(mp.Process):
     #     if self.soft_real_time:
     #         os.sched_setscheduler(0, os.SCHED_RR, os.sched_param(20))
 
-        robot = self.robot_interface
+        rospy.init_node('franka_interpolation_controller')
+        robot = FrankaROSInterface()
 
         # while not rospy.is_shutdown() and (robot.ee_pose is None or robot.joint_positions is None):
         #     print("[Robot] Waiting for messages...")
@@ -276,11 +274,12 @@ class FrankaVariableImpedanceController(mp.Process):
             # rate = rospy.Rate(self.frequency)
             keep_running = True
 
-            while keep_running:
+            while not rospy.is_shutdown() and keep_running:
                 t_now = time.monotonic()
                 
                 # Compute interpolated pose and publish
                 ee_pose = pose_interp(t_now)
+                # print("[Robot] Interpolated EE pose:", ee_pose)
                 robot.update_desired_ee_pose(ee_pose)
                 # Read robot state and push to buffer
                 state = dict()
@@ -291,16 +290,17 @@ class FrankaVariableImpedanceController(mp.Process):
                 state['robot_receive_timestamp'] = t_recv
                 state['robot_timestamp'] = t_recv - self.receive_latency
                 self.ring_buffer.put(state)
+                # print("[Robot] Pushed state to ring buffer:", )
 
-                # print("[Child] Queue count:", self.input_queue.count)
+                # print("[Robot] Queue size:", self.input_queue.qsize())
 
                 # Process commands
                 try:
                     commands = self.input_queue.get_k(1)
-                    print("[Robot] Received commands:", commands)
+                    # print("[Robot] Received commands:", commands)
                     n_cmd = len(commands['cmd'])
                 except Empty:
-                    print("[Robot] No command received.")
+                    # print("[Robot] No command received.")
                     n_cmd = 0
 
                 for i in range(n_cmd):
@@ -339,6 +339,11 @@ class FrankaVariableImpedanceController(mp.Process):
                             last_waypoint_time=last_waypoint_time
                         )
                         last_waypoint_time = target_time
+                        # target_pose = command['target_pose']
+                        # print("[Robot] Directly publishing pose:", target_pose)
+                        # robot.update_desired_ee_pose(target_pose)
+
+
                     # elif cmd == Command.SET_IMPEDANCE.value:
                     #     self.curr_Kx = command['Kx']
                     #     self.curr_Kxd = command['Kxd']
