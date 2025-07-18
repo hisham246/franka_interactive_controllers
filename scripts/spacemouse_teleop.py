@@ -79,50 +79,50 @@ def main():
     pose_pub = rospy.Publisher('/cartesian_pose_impedance_controller/desired_pose', PoseStamped, queue_size=1)
     rospy.loginfo("ROS publisher ready.")
 
-    # Dynamic Reconfigure Client for stiffness updates
-    dyn_client = DynamicReconfigureClient('/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node')
+    # # Dynamic Reconfigure Client for stiffness updates
+    # dyn_client = DynamicReconfigureClient('/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node')
 
-    impedance_profiles = [
-        dict(translational_stiffness_x=100, 
-             translational_stiffness_y=100, 
-             translational_stiffness_z=100, 
-             rotational_stiffness_x=10, 
-             rotational_stiffness_y=10, 
-             rotational_stiffness_z=10),
-        dict(translational_stiffness_x=150, 
-             translational_stiffness_y=150, 
-             translational_stiffness_z=150, 
-             rotational_stiffness_x=20, 
-             rotational_stiffness_y=20, 
-             rotational_stiffness_z=20),
-        dict(translational_stiffness_x=200, 
-             translational_stiffness_y=200, 
-             translational_stiffness_z=200, 
-             rotational_stiffness_x=30, 
-             rotational_stiffness_y=30, 
-             rotational_stiffness_z=30),
-        dict(translational_stiffness_x=300, 
-             translational_stiffness_y=300, 
-             translational_stiffness_z=300, 
-             rotational_stiffness_x=30, 
-             rotational_stiffness_y=30, 
-             rotational_stiffness_z=30),
-        dict(translational_stiffness_x=400, 
-             translational_stiffness_y=400, 
-             translational_stiffness_z=400, 
-             rotational_stiffness_x=30, 
-             rotational_stiffness_y=30, 
-             rotational_stiffness_z=30),
-        dict(translational_stiffness_x=500, 
-             translational_stiffness_y=500, 
-             translational_stiffness_z=500, 
-             rotational_stiffness_x=30, 
-             rotational_stiffness_y=30, 
-             rotational_stiffness_z=30),
-    ]
-    imp_idx = 0
-    impedance_update_period = 5.0  # seconds
-    last_impedance_update = time.monotonic()
+    # impedance_profiles = [
+    #     dict(translational_stiffness_x=100, 
+    #          translational_stiffness_y=100, 
+    #          translational_stiffness_z=100, 
+    #          rotational_stiffness_x=10, 
+    #          rotational_stiffness_y=10, 
+    #          rotational_stiffness_z=10),
+    #     dict(translational_stiffness_x=150, 
+    #          translational_stiffness_y=150, 
+    #          translational_stiffness_z=150, 
+    #          rotational_stiffness_x=20, 
+    #          rotational_stiffness_y=20, 
+    #          rotational_stiffness_z=20),
+    #     dict(translational_stiffness_x=200, 
+    #          translational_stiffness_y=200, 
+    #          translational_stiffness_z=200, 
+    #          rotational_stiffness_x=30, 
+    #          rotational_stiffness_y=30, 
+    #          rotational_stiffness_z=30),
+    #     dict(translational_stiffness_x=300, 
+    #          translational_stiffness_y=300, 
+    #          translational_stiffness_z=300, 
+    #          rotational_stiffness_x=30, 
+    #          rotational_stiffness_y=30, 
+    #          rotational_stiffness_z=30),
+    #     dict(translational_stiffness_x=400, 
+    #          translational_stiffness_y=400, 
+    #          translational_stiffness_z=400, 
+    #          rotational_stiffness_x=30, 
+    #          rotational_stiffness_y=30, 
+    #          rotational_stiffness_z=30),
+    #     dict(translational_stiffness_x=500, 
+    #          translational_stiffness_y=500, 
+    #          translational_stiffness_z=500, 
+    #          rotational_stiffness_x=30, 
+    #          rotational_stiffness_y=30, 
+    #          rotational_stiffness_z=30),
+    # ]
+    # imp_idx = 0
+    # impedance_update_period = 5.0  # seconds
+    # last_impedance_update = time.monotonic()
 
     # Wait for initial robot pose
     rospy.loginfo("Waiting for /franka_state_controller/ee_pose...")
@@ -153,12 +153,12 @@ def main():
             precise_wait(t_sample)
 
             # Periodic impedance update
-            now = time.monotonic()
-            if now - last_impedance_update >= impedance_update_period:
-                imp_idx = (imp_idx + 1) % len(impedance_profiles)
-                dyn_client.update_configuration(impedance_profiles[imp_idx])
-                rospy.loginfo(f"[Impedance Switch] Updated to: {impedance_profiles[imp_idx]}")
-                last_impedance_update = now
+            # now = time.monotonic()
+            # if now - last_impedance_update >= impedance_update_period:
+            #     imp_idx = (imp_idx + 1) % len(impedance_profiles)
+            #     dyn_client.update_configuration(impedance_profiles[imp_idx])
+            #     rospy.loginfo(f"[Impedance Switch] Updated to: {impedance_profiles[imp_idx]}")
+            #     last_impedance_update = now
 
             # Get SpaceMouse motion
             sm_state = sm.get_motion_state_transformed()

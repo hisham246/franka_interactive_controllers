@@ -189,15 +189,15 @@ class UvcCamera(mp.Process):
         return self.vis_ring_buffer.get(out=out)
 
     def start_recording(self, video_path: str, start_time: float=-1):
-        # path_len = len(video_path.encode('utf-8'))
-        # if path_len > self.MAX_PATH_LENGTH:
-        #     raise RuntimeError('video_path too long.')
-        # self.command_queue.put({
-        #     'cmd': Command.START_RECORDING.value,
-        #     'video_path': video_path,
-        #     'recording_start_time': start_time
-        # })
-        pass
+        path_len = len(video_path.encode('utf-8'))
+        if path_len > self.MAX_PATH_LENGTH:
+            raise RuntimeError('video_path too long.')
+        self.command_queue.put({
+            'cmd': Command.START_RECORDING.value,
+            'video_path': video_path,
+            'recording_start_time': start_time
+        })
+        # pass
         
     def stop_recording(self):
         self.command_queue.put({

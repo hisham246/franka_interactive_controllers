@@ -139,14 +139,15 @@ class VideoRecorder(mp.Process):
             and (not self.stop_event.is_set())
         
     def start_recording(self, video_path: str, start_time: float=-1):
-        path_len = len(video_path.encode('utf-8'))
-        if path_len > self.MAX_PATH_LENGTH:
-            raise RuntimeError('video_path too long.')
-        self.start_time = start_time
-        self.cmd_queue.put({
-            'cmd': self.Command.START_RECORDING.value,
-            'video_path': video_path
-        })
+        # path_len = len(video_path.encode('utf-8'))
+        # if path_len > self.MAX_PATH_LENGTH:
+        #     raise RuntimeError('video_path too long.')
+        # self.start_time = start_time
+        # self.cmd_queue.put({
+        #     'cmd': self.Command.START_RECORDING.value,
+        #     'video_path': video_path
+        # })
+        pass
     
     def stop_recording(self):
         self.cmd_queue.put({
@@ -253,9 +254,7 @@ class VideoRecorder(mp.Process):
             #     # Keep only up to the first ".mp4"
             #     video_path = video_path[:video_path.find('.mp4') + 4]
 
-            # print("Cleaned video path:", video_path)
-            print(f"Opening {video_path} with codec={self.codec}, fps={self.fps}, shape={self.shape}")
-            print(f"Exists? {os.path.exists(video_path)}, IsDir? {os.path.isdir(video_path)}")
+
             # ========= recording state ==========
             with av.open(video_path, mode='w') as container:
                 print("What about now?", os.path.exists(video_path))

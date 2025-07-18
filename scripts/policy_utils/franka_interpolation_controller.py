@@ -335,6 +335,8 @@ class FrankaVariableImpedanceController(mp.Process):
                         pose_interp = pose_interp.schedule_waypoint(
                             pose=target_pose,
                             time=target_time,
+                            max_pos_speed=1.5,
+                            max_rot_speed=1.5,                            
                             curr_time=curr_time,
                             last_waypoint_time=last_waypoint_time
                         )

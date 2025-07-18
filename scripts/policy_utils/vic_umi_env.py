@@ -216,18 +216,6 @@ class VicUmiEnv:
 
         self.replay_buffer = replay_buffer
         self.episode_id_counter = self.replay_buffer.n_episodes
-
-    #     example = {
-    #     'cmd': Command.SERVOL.value,
-    #     'target_pose': np.zeros((6,), dtype=np.float64),
-    #     'duration': 0.0,
-    #     'target_time': 0.0
-    # }
-    #     self.robot_command_queue = SharedMemoryQueue.create_from_examples(
-    #         shm_manager=shm_manager,
-    #         examples=example,
-    #         buffer_size=256
-    #                         )
         
         robot = FrankaVariableImpedanceController(
             shm_manager=shm_manager,
@@ -328,39 +316,7 @@ class VicUmiEnv:
 
         "observation dict"
 
-        # import pdb; pdb.set_trace()
-
         assert self.is_ready
-
-        # timeout_sec = 10
-        # t0 = time.time()
-        # while not self.is_ready:
-        #     if self.start_time is not None and time.time() - self.start_time > timeout_sec:
-        #         raise TimeoutError("[VicUmiEnv] Timeout: robot, camera, or gripper not ready after 10 seconds.")
-        #     print("[VicUmiEnv] Waiting for system to be ready...")
-        #     time.sleep(0.05)
-        
-
-        # if not self.is_ready:
-        #     print("Waiting for system to become ready...")
-        #     start = time.time()
-        #     while not self.is_ready and time.time() - start < 10:
-        #         time.sleep(0.05)
-        #     if not self.is_ready:
-        #         raise RuntimeError("System not ready after timeout.")
-
-        # # Wait for camera frames to arrive
-        # camera_ready = False
-        # for _ in range(100):  # try for 5 seconds max
-        #     data = self.camera.get(k=1)
-        #     if data is not None and len(data[0]['color']) > 0:
-        #         camera_ready = True
-        #         break
-        #     time.sleep(1.0)
-
-        # if not camera_ready:
-        #     raise RuntimeError("Camera data not received in time.")
-
 
         # get data
         # 60 Hz, camera_calibrated_timestamp
@@ -368,16 +324,6 @@ class VicUmiEnv:
             self.camera_obs_horizon * self.camera_down_sample_steps \
             * (60 / self.frequency))
                 
-        # retry_limit = 100
-        # for i in range(retry_limit):
-        #     try:
-        #         count = self.camera._cameras[0].ring_buffer.count  # or whichever camera index is used
-        #         print(f"K: {k} | Count: {count}")
-        #         self.last_camera_data = self.camera.get(k=k, out=self.last_camera_data)
-        #         break
-        #     except AssertionError:
-        #         rospy.logwarn(f"[VicUmiEnv] Waiting for camera ring buffer to fill ({i+1}/{retry_limit})...")
-        #         time.sleep(0.05)    
         
         # print("before camera buffer read")
         self.last_camera_data = self.camera.get(
@@ -387,8 +333,6 @@ class VicUmiEnv:
 
         last_robot_data = self.robot.get_all_state()
 
-        # print("[DEBUG] Retrieved robot state from ring buffer:", last_robot_data.keys())
-        # print("[DEBUG] Sample ActualTCPPose:", last_robot_data['ActualTCPPose'][-1])
 
         # 30 hz, gripper_receive_timestamp
         last_gripper_data = self.gripper.get_all_state()
@@ -537,7 +481,6 @@ class VicUmiEnv:
         print("This video dir:", this_video_dir)
         for i in range(n_cameras):
             video_paths.append(str(this_video_dir.joinpath(f'{i}.mp4').absolute()))
-            print("Last video path:", video_paths[-1])
             # video_path = this_video_dir
             # video_paths.append(str(video_path.absolute()))
 

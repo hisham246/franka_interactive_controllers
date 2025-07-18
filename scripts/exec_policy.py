@@ -21,8 +21,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR))
 sys.path.insert(0, PROJECT_ROOT)
 
-# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from policy_utils.replay_buffer import ReplayBuffer
 from policy_utils.cv_util import (
     parse_fisheye_intrinsics,
@@ -43,12 +41,13 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 def main():
-    output = 'test'
+    output = '/home/hisham246/uwaterloo/test'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
     match_camera = 0
     steps_per_inference = 1
+    vis_camera_idx = 0
     max_duration = 120
     frequency = 10.0
     no_mirror = False
@@ -58,11 +57,6 @@ def main():
     mirror_swap = False
     temporal_ensembling = True 
             
-    # rospy.init_node("exec_policy_node")
-
-    # robot_interface = FrankaROSInterface()
-    # rospy.sleep(0.2)
-
     # Diffusion Transformer
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
 
@@ -309,27 +303,27 @@ def main():
                             print("No valid actions to submit.")
 
 
-                        # # visualize
-                        # episode_id = env.replay_buffer.n_episodes
-                        # if mirror_crop:
-                        #     vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
-                        #     crop_img = obs['camera0_rgb_mirror_crop'][-1]
-                        #     vis_img = np.concatenate([vis_img, crop_img], axis=1)
-                        # else:
-                        #     vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
-                        # text = 'Episode: {}, Time: {:.1f}'.format(
-                        #     episode_id, time.monotonic() - t_start
-                        # )
-                        # cv2.putText(
-                        #     vis_img,
-                        #     text,
-                        #     (10,20),
-                        #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        #     fontScale=0.5,
-                        #     thickness=1,
-                        #     color=(255,255,255)
-                        # )
-                        # cv2.imshow('default', vis_img[...,::-1])
+                        # visualize
+                        episode_id = env.replay_buffer.n_episodes
+                        if mirror_crop:
+                            vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
+                            crop_img = obs['camera0_rgb_mirror_crop'][-1]
+                            vis_img = np.concatenate([vis_img, crop_img], axis=1)
+                        else:
+                            vis_img = obs[f'camera{vis_camera_idx}_rgb'][-1]
+                        text = 'Episode: {}, Time: {:.1f}'.format(
+                            episode_id, time.monotonic() - t_start
+                        )
+                        cv2.putText(
+                            vis_img,
+                            text,
+                            (10,20),
+                            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                            fontScale=0.5,
+                            thickness=1,
+                            color=(255,255,255)
+                        )
+                        cv2.imshow('default', vis_img[...,::-1])
 
                         # _ = cv2.pollKey()
                         press_events = key_counter.get_press_events()
