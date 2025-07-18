@@ -27,7 +27,7 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   std::vector<double> cartesian_damping_vector;
 
   sub_desired_pose_ = node_handle.subscribe(
-      "/cartesian_impedance_controller/desired_pose", 20, &CartesianPoseImpedanceController::desiredPoseCallback, this,
+      "/cartesian_pose_impedance_controller/desired_pose", 20, &CartesianPoseImpedanceController::desiredPoseCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
 
   // Getting ROSParams

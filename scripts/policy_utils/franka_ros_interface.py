@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 class FrankaROSInterface:
     def __init__(self,
                 #  ros_init=True,
-                 pose_topic='/cartesian_impedance_controller/desired_pose',
+                 pose_topic='/cartesian_pose_impedance_controller/desired_pose',
                  impedance_config_ns='/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node',
                  ee_state_topic='/franka_state_controller/ee_pose',
                  joint_state_topic='/joint_states'):
