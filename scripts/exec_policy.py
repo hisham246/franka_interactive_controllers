@@ -177,22 +177,7 @@ def main():
             device = torch.device('cuda')
             policy.eval().to(device)
 
-            # import pdb; pdb.set_trace()
-            
-            print("Warming up policy inference")
-            print(f"Robot ready? {env.robot.is_ready}")
-            print(f"Camera ready? {env.camera.is_ready}")
-            print(f"Env ready? {env.is_ready}")
-
             obs = env.get_obs()
-            # while True:
-            #     try:
-            #         obs = env.get_obs()
-            #         break
-            #     except Exception as e:
-            #         print("Error during warm-up get_obs():", e)
-            #         traceback.print_exc()
-            #         return
             # print("Observation", obs)           
             episode_start_pose = np.concatenate([
                     obs[f'robot0_eef_pos'],
