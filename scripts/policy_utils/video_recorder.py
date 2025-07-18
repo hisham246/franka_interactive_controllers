@@ -1,14 +1,12 @@
-from typing import Optional, Callable, Generator
 import numpy as np
 import av
 import time
 import enum
 import multiprocessing as mp
 from multiprocessing.managers import SharedMemoryManager
-from policy_utils.shared_memory_queue import SharedMemoryQueue, Full, Empty
+from policy_utils.shared_memory_queue import SharedMemoryQueue, Empty
 from policy_utils.timestamp_accumulator import get_accumulate_timestamp_idxs
 import os
-import traceback
 
 import av.logging
 av.logging.set_level(av.logging.VERBOSE)

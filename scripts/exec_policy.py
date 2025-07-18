@@ -299,7 +299,6 @@ def main():
 
                         # Final execution
                         if len(this_target_poses) > 0:
-                            print("Executing actions")
                             env.exec_actions(
                                 actions=np.stack(this_target_poses),
                                 timestamps=np.array(action_timestamps),
