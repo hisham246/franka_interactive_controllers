@@ -75,7 +75,9 @@ class VideoRecorder(mp.Process):
             bit_rate=6000*1000,
             options={
                 'tune': 'll', 
-                'preset': 'll'
+                'preset': 'p1'
+                # 'preset': 'll'
+
             },
             **kwargs
         ):

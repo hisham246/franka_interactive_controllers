@@ -225,7 +225,7 @@ def main():
 
                         # get obs
                         obs = env.get_obs()
-                        # print("Observations:", obs)
+                        print("Camera:", obs['camera0_rgb'].shape)
                         episode_start_pose = np.concatenate([
                             obs[f'robot0_eef_pos'],
                             obs[f'robot0_eef_rot_axis_angle']
