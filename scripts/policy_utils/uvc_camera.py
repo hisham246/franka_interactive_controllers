@@ -268,7 +268,7 @@ class UvcCamera(mp.Process):
                 data['camera_receive_timestamp'] = t_recv
                 data['camera_capture_timestamp'] = t_cap
                 # data['color'] = copy.deepcopy(frame)
-                data['color'] = frame.copy()
+                data['color'] = frame
                 
                 # apply transform
                 put_data = data

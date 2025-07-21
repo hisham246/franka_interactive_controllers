@@ -21,7 +21,6 @@ class Command(enum.Enum):
     STOP = 0
     SERVOL = 1
     SCHEDULE_WAYPOINT = 2
-    SET_IMPEDANCE = 3
 
 class FrankaROSInterface:
     def __init__(self,
@@ -69,20 +68,11 @@ class FrankaROSInterface:
         # print("Publishing desired pose:", msg)
         self.pose_pub.publish(msg)
 
-    def update_impedance_gains(self, Kx: np.ndarray, Kxd: np.ndarray):
+    def update_stiffness_gains(self, Kx: np.ndarray):
         config = {
             'translational_stiffness_x': Kx[0],
             'translational_stiffness_y': Kx[1],
             'translational_stiffness_z': Kx[2],
-            'rotational_stiffness_x': Kx[3],
-            'rotational_stiffness_y': Kx[4],
-            'rotational_stiffness_z': Kx[5],
-            'translational_damping_x': Kxd[0],
-            'translational_damping_y': Kxd[1],
-            'translational_damping_z': Kxd[2],
-            'rotational_damping_x': Kxd[3],
-            'rotational_damping_y': Kxd[4],
-            'rotational_damping_z': Kxd[5],
         }
         self.dyn_client.update_configuration(config)
     
@@ -125,8 +115,7 @@ class FrankaVariableImpedanceController(mp.Process):
         example = {
             'cmd': Command.SERVOL.value,
             'target_pose': np.zeros((6,), dtype=np.float64),
-            # 'Kx': np.zeros((6,), dtype=np.float64),
-            # 'Kxd': np.zeros((6,), dtype=np.float64),
+            'target_stiffness': np.zeros((3,), dtype=np.float64),
             'duration': 0.0,
             'target_time': 0.0
         }
@@ -159,10 +148,6 @@ class FrankaVariableImpedanceController(mp.Process):
             get_time_budget=0.2,
             put_desired_frequency=frequency
         )
-
-        # if input_queue is None:
-        #     raise ValueError("input_queue must be provided")
-        # self.input_queue = input_queue
 
         self.ready_event = mp.Event()
         self.input_queue = input_queue
@@ -202,14 +187,15 @@ class FrankaVariableImpedanceController(mp.Process):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
-    def servoL(self, pose, duration=0.1):
+    def servoL(self, pose, stiffness, duration=0.1):
         assert self.is_alive()
         assert(duration >= (1/self.frequency))
         pose = np.array(pose)
         assert pose.shape == (6,)
         message = {
             'cmd': Command.SERVOL.value,
-            'target_pose': pose,
+            'target_pose': pose,    
+            'target_stiffness': stiffness,
             'duration': duration
         }
 
@@ -217,24 +203,17 @@ class FrankaVariableImpedanceController(mp.Process):
         self.input_queue.put(message)
 
 
-    def schedule_waypoint(self, pose, target_time):
+    def schedule_waypoint(self, pose, stiffness, target_time):
         pose = np.array(pose)
         assert pose.shape == (6,)
         message = {
             'cmd': Command.SCHEDULE_WAYPOINT.value,
             'target_pose': pose,
+            'target_stiffness': stiffness,
             'target_time': target_time
         }
         self.input_queue.put(message)
 
-    def set_impedance(self, Kx, Kxd):
-        assert self.is_alive()
-        assert Kx.shape == (6,) and Kxd.shape == (6,)
-        self.input_queue.put({
-            'cmd': Command.SET_IMPEDANCE.value,
-            'Kx': Kx,
-            'Kxd': Kxd
-        })
 
     def get_state(self, k=None, out=None):
         if k is None:
@@ -247,17 +226,16 @@ class FrankaVariableImpedanceController(mp.Process):
         return self.ring_buffer.get_all()
 
     def run(self):
-    #     if self.soft_real_time:
-    #         os.sched_setscheduler(0, os.SCHED_RR, os.sched_param(20))
 
         rospy.init_node('franka_interpolation_controller')
         robot = FrankaROSInterface()
 
-        # while not rospy.is_shutdown() and (robot.ee_pose is None or robot.joint_positions is None):
-        #     print("[Robot] Waiting for messages...")
-        #     rospy.sleep(0.1)
-
         try:
+            stiffness_update_rate = 10  # Hz
+            stiffness_update_dt = 1.0 / stiffness_update_rate
+            last_stiffness_update_time = time.monotonic()
+            target_stiffness = None
+
             dt = 1. / self.frequency
             curr_pose = robot.get_ee_pose()
             print("[Robot] Got EE pose:", curr_pose)
@@ -281,6 +259,12 @@ class FrankaVariableImpedanceController(mp.Process):
                 ee_pose = pose_interp(t_now)
                 # print("[Robot] Interpolated EE pose:", ee_pose)
                 robot.update_desired_ee_pose(ee_pose)
+
+                # Lower frequency stiffness update
+                if target_stiffness is not None and t_now - last_stiffness_update_time >= stiffness_update_dt:
+                    robot.update_stiffness_gains(target_stiffness)
+                    last_stiffness_update_time = t_now
+
                 # Read robot state and push to buffer
                 state = dict()
                 for key, func_name in self.receive_keys:
@@ -290,9 +274,6 @@ class FrankaVariableImpedanceController(mp.Process):
                 state['robot_receive_timestamp'] = t_recv
                 state['robot_timestamp'] = t_recv - self.receive_latency
                 self.ring_buffer.put(state)
-                # print("[Robot] Pushed state to ring buffer:", )
-
-                # print("[Robot] Queue size:", self.input_queue.qsize())
 
                 # Process commands
                 try:
@@ -328,6 +309,7 @@ class FrankaVariableImpedanceController(mp.Process):
                         )
                         last_waypoint_time = t_insert
                     elif cmd == Command.SCHEDULE_WAYPOINT.value:
+                        target_stiffness = command['target_stiffness']
                         target_pose = command['target_pose']
                         target_time = float(command['target_time'])
                         target_time = time.monotonic() - time.time() + target_time
@@ -335,24 +317,16 @@ class FrankaVariableImpedanceController(mp.Process):
                         pose_interp = pose_interp.schedule_waypoint(
                             pose=target_pose,
                             time=target_time,
-                            max_pos_speed=3.5,
-                            max_rot_speed=3.5,                            
+                            # max_pos_speed=3.5,
+                            # max_rot_speed=3.5,                            
                             curr_time=curr_time,
                             last_waypoint_time=last_waypoint_time
                         )
                         last_waypoint_time = target_time
-                        # target_pose = command['target_pose']
-                        # print("[Robot] Directly publishing pose:", target_pose)
-                        # robot.update_desired_ee_pose(target_pose)
 
-
-                    # elif cmd == Command.SET_IMPEDANCE.value:
-                    #     self.curr_Kx = command['Kx']
-                    #     self.curr_Kxd = command['Kxd']
-                    #     robot.update_impedance_gains(self.curr_Kx, self.curr_Kxd)
-                    # else:
-                    #     keep_running = False
-                    #     break
+                    else:
+                        keep_running = False
+                        break
 
                 # regulate frequency
                 t_wait_util = t_start + (iter_idx + 1) * dt

@@ -1,4 +1,3 @@
-import sys
 import os
 import hydra
 import torch
@@ -12,6 +11,7 @@ import pickle
 import tqdm
 import numpy as np
 import shutil
+import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from policy_utils.base_workspace import BaseWorkspace
 from diffusion_policy.diffusion_unet_image_policy import DiffusionUnetImagePolicy
@@ -26,7 +26,7 @@ from accelerate import Accelerator
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
+class TrainDiffusionUnetComplianceWorkspace(BaseWorkspace):
     include_keys = ['global_step', 'epoch']
     exclude_keys = tuple()
 
@@ -86,6 +86,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
         accelerator = Accelerator(log_with='wandb')
         wandb_cfg = OmegaConf.to_container(cfg.logging, resolve=True)
         wandb_cfg.pop('project')
+        wandb_cfg['dir'] = os.path.abspath(os.path.join(os.getcwd(), "../"))
         accelerator.init_trackers(
             project_name=cfg.logging.project,
             config=OmegaConf.to_container(cfg, resolve=True),
@@ -293,12 +294,13 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 
                 def log_action_mse(step_log, category, pred_action, gt_action):
                     B, T, _ = pred_action.shape
-                    pred_action = pred_action.view(B, T, -1, 10)
-                    gt_action = gt_action.view(B, T, -1, 10)
+                    pred_action = pred_action.view(B, T, -1, 16)
+                    gt_action = gt_action.view(B, T, -1, 16)
                     step_log[f'{category}_action_mse_error'] = torch.nn.functional.mse_loss(pred_action, gt_action)
                     step_log[f'{category}_action_mse_error_pos'] = torch.nn.functional.mse_loss(pred_action[..., :3], gt_action[..., :3])
                     step_log[f'{category}_action_mse_error_rot'] = torch.nn.functional.mse_loss(pred_action[..., 3:9], gt_action[..., 3:9])
-                    step_log[f'{category}_action_mse_error_width'] = torch.nn.functional.mse_loss(pred_action[..., 9], gt_action[..., 9])
+                    step_log[f'{category}_action_mse_error_stiffness'] = torch.nn.functional.mse_loss(pred_action[..., 9:15], gt_action[..., 9:15])
+                    step_log[f'{category}_action_mse_error_width'] = torch.nn.functional.mse_loss(pred_action[..., 15], gt_action[..., 15])
                 # run diffusion sampling on a training batch
                 if (self.epoch % cfg.training.sample_every) == 0 and accelerator.is_main_process:
                     with torch.no_grad():
@@ -362,7 +364,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
     config_path=str(pathlib.Path(__file__).parent.parent.joinpath("config")), 
     config_name=pathlib.Path(__file__).stem)
 def main(cfg):
-    workspace = TrainDiffusionUnetImageWorkspace(cfg)
+    workspace = TrainDiffusionUnetComplianceWorkspace(cfg)
     workspace.run()
 
 if __name__ == "__main__":

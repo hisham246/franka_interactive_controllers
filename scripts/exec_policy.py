@@ -61,15 +61,15 @@ def main():
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
 
     # Compliance policy unet
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
 
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
 
-    cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
+    cfg._target_ = "diffusion_policy.train_diffusion_unet_compliance_workspace.TrainDiffusionUnetComplianceWorkspace"
     cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
     cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
     cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
@@ -188,13 +188,14 @@ def main():
                     lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                 result = policy.predict_action(obs_dict)
                 action = result['action_pred'][0].detach().to('cpu').numpy()
-                # assert action.shape[-1] == 16
-                assert action.shape[-1] == 10
-                action = get_real_umi_action(action, obs, action_pose_repr)
+                assert action.shape[-1] == 16
                 # assert action.shape[-1] == 10
-                assert action.shape[-1] == 7
+                action = get_real_umi_action(action, obs, action_pose_repr)
+                assert action.shape[-1] == 10
+                # assert action.shape[-1] == 7
                 del result
 
+            time.sleep(3.0)  # wait to get to stop button for safety!
             print('Ready!')
 
             while  not rospy.is_shutdown():                
@@ -225,13 +226,13 @@ def main():
 
                         # get obs
                         obs = env.get_obs()
-                        print("Camera:", obs['camera0_rgb'].shape)
+                        # print("Camera:", obs['camera0_rgb'].shape)
                         episode_start_pose = np.concatenate([
                             obs[f'robot0_eef_pos'],
                             obs[f'robot0_eef_rot_axis_angle']
                         ], axis=-1)[-1]
                         obs_timestamps = obs['timestamp']
-                        # print(f'Obs latency {time.time() - obs_timestamps[-1]}')
+                        print(f'Obs latency {time.time() - obs_timestamps[-1]}')
 
                         # run inference
                         with torch.no_grad():
@@ -248,7 +249,7 @@ def main():
 
                             # print("Actions", action)
 
-                            # print('Inference latency:', time.time() - s)
+                            print('Inference latency:', time.time() - s)
                             if temporal_ensembling:
                                 for i, a in enumerate(action):
                                     target_step = iter_idx + i
@@ -363,5 +364,3 @@ def main():
 # %%
 if __name__ == '__main__':
     main()
-    # except rospy.ROSInterruptException:
-    #     pass
