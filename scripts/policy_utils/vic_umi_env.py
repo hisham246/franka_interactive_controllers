@@ -1,4 +1,3 @@
-import rospy
 import pathlib
 import numpy as np
 import time
@@ -24,10 +23,6 @@ from policy_utils.cv2_util import (
 from policy_utils.usb_util import reset_all_avermedia_devices, get_sorted_v4l_paths
 from policy_utils.interpolation_util import get_interp1d, PoseInterpolator
 import enum
-
-from policy_utils.shared_memory_queue import (
-    SharedMemoryQueue, Empty)
-from policy_utils.franka_interpolation_controller import Command
 
 class Command(enum.Enum):
     STOP = 0
@@ -432,10 +427,10 @@ class VicUmiEnv:
         # schedule waypoints
         for i in range(len(new_actions)):
             r_actions = new_actions[i,:6]
-            g_actions = new_actions[i, 9:]
-            # g_actions = new_actions[i, 6:]
+            # g_actions = new_actions[i, 9:]
+            g_actions = new_actions[i, 6:]
 
-            Kx_trans = new_actions[i, 6:9]
+            # Kx_trans = new_actions[i, 6:9]
             # Kx = np.concatenate([Kx_trans, Kx_rot])
             
             # Damping gains
@@ -447,7 +442,7 @@ class VicUmiEnv:
             # print("Scheduling")
             self.robot.schedule_waypoint(
                 pose=r_actions,
-                stiffness=Kx_trans,
+                # stiffness=Kx_trans,
                 target_time=new_timestamps[i]-r_latency
             )
             self.gripper.schedule_waypoint(

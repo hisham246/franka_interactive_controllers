@@ -346,12 +346,12 @@ void CartesianPoseImpedanceController::complianceParamCallback(
 
   // Set damping to ensure critical damping ratio
   cartesian_damping_target_.setIdentity();
-  cartesian_damping_target_(0, 0) = 2.0 * 0.3 * sqrt(config.translational_stiffness_x);
-  cartesian_damping_target_(1, 1) = 2.0 * 0.3 * sqrt(config.translational_stiffness_y);
-  cartesian_damping_target_(2, 2) = 2.0 * 0.3 * sqrt(config.translational_stiffness_z);
-  cartesian_damping_target_(3, 3) = 2.0 * 0.3 * sqrt(config.rotational_stiffness_x);
-  cartesian_damping_target_(4, 4) = 2.0 * 0.3 * sqrt(config.rotational_stiffness_y);
-  cartesian_damping_target_(5, 5) = 2.0 * 0.3 * sqrt(config.rotational_stiffness_z);
+  cartesian_damping_target_(0, 0) = 2.0 * 0.7 * sqrt(config.translational_stiffness_x);
+  cartesian_damping_target_(1, 1) = 2.0 * 0.7 * sqrt(config.translational_stiffness_y);
+  cartesian_damping_target_(2, 2) = 2.0 * 0.7 * sqrt(config.translational_stiffness_z);
+  cartesian_damping_target_(3, 3) = 2.0 * 0.7 * sqrt(config.rotational_stiffness_x);
+  cartesian_damping_target_(4, 4) = 2.0 * 0.7 * sqrt(config.rotational_stiffness_y);
+  cartesian_damping_target_(5, 5) = 2.0 * 0.7 * sqrt(config.rotational_stiffness_z);
 
   nullspace_stiffness_target_ = config.nullspace_stiffness;
 }
