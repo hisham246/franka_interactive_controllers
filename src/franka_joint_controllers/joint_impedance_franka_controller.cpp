@@ -195,7 +195,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     last_tau_d_[i] = tau_d_saturated[i] + gravity[i];
   }
 
-  Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_.data());
+  Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_d_.data());
   ROS_INFO_STREAM(pose_matrix);
 
 }
@@ -213,6 +213,8 @@ std::array<double, 7> JointImpedanceFrankaController::saturateTorqueRate(
 
 void JointImpedanceFrankaController::desiredPoseCallback(const std_msgs::Float64MultiArray& msg)
 {
+
+    ROS_INFO_STREAM("Received desired pose msg");
     for (size_t i=0; i < 16; i++){
       target_pose_d_[i] = msg.data[i];
     }

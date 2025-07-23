@@ -62,7 +62,7 @@ def main():
     rospy.init_node('teleop_spacemouse_ros_node')
 
     # Parameters
-    frequency = rospy.get_param('~frequency', 10.0)
+    frequency = rospy.get_param('~frequency', 1000.0)
     max_pos_speed = rospy.get_param('~max_pos_speed', 0.25)
     max_rot_speed = rospy.get_param('~max_rot_speed', 0.6)
     gripper_speed = rospy.get_param('~gripper_speed', 0.05)
@@ -105,7 +105,6 @@ def main():
             precise_wait(t_sample)
 
             sm_state = sm.get_motion_state_transformed()
-            print(f"[DEBUG] Raw SpaceMouse state: {sm_state}")
             dpos = sm_state[:3] * (max_pos_speed / frequency)
             drot_xyz = sm_state[3:] * (max_rot_speed / frequency)
             drot = st.Rotation.from_euler('xyz', drot_xyz)
@@ -113,9 +112,6 @@ def main():
             target_pose[:3] += dpos
             target_pose[3:] = (drot * st.Rotation.from_rotvec(target_pose[3:])).as_rotvec()
             target_pose[2] = max(target_pose[2], 0.05)
-
-            print(f"[DEBUG] dpos: {dpos}, drot_xyz: {drot_xyz}")
-            print(f"[DEBUG] Updated target pose: {target_pose}")
 
             dwidth = 0
             if sm.is_button_pressed(0):
