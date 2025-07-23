@@ -41,25 +41,21 @@ class InitialPoseListener:
 
 
 def publish_pose(publisher, pose):
-    """Publish a 6D pose (xyz + rotvec) as a geometry_msgs/PoseStamped."""
+    """Publish a 4x4 homogeneous transform as Float64MultiArray (column-major for Franka)."""
     pos = pose[:3]
     rotvec = pose[3:]
     quat = R.from_rotvec(rotvec).as_quat()
+    rotm = R.from_quat(quat).as_matrix()
 
-    msg = PoseStamped()
-    msg.header.stamp = rospy.Time.now()
-    msg.header.frame_id = "panda_link0"
+    # Build homogeneous transform
+    T = np.eye(4)
+    T[:3, :3] = rotm
+    T[:3, 3] = pos
 
-    msg.pose.position.x = pos[0]
-    msg.pose.position.y = pos[1]
-    msg.pose.position.z = pos[2]
-
-    msg.pose.orientation.x = quat[0]
-    msg.pose.orientation.y = quat[1]
-    msg.pose.orientation.z = quat[2]
-    msg.pose.orientation.w = quat[3]
-
-    publisher.publish(msg)
+    msg = Float64MultiArray()
+    msg.data = T.T.ravel().tolist()
+    print(f"Publishing pose: {msg.data}")
+    # publisher.publish(msg)
 
 
 def main():
@@ -97,51 +93,39 @@ def main():
         iter_idx = 0
         stop = False
 
-        while not rospy.is_shutdown() and not stop:
-            t_cycle_end = t_start + (iter_idx + 1) * dt
-            t_sample = t_cycle_end - command_latency
+    while not rospy.is_shutdown() and not stop:
+        t_cycle_end = t_start + (iter_idx + 1) * dt
+        t_sample = t_cycle_end - command_latency
 
-            # Exit on 'q' key
-            press_events = key_counter.get_press_events()
-            for key_stroke in press_events:
-                if key_stroke == KeyCode(char='q'):
-                    stop = True
+        press_events = key_counter.get_press_events()
+        for key_stroke in press_events:
+            if key_stroke == KeyCode(char='q'):
+                stop = True
 
-            precise_wait(t_sample)
+        precise_wait(t_sample)
 
-            # Periodic impedance update
-            # now = time.monotonic()
-            # if now - last_impedance_update >= impedance_update_period:
-            #     imp_idx = (imp_idx + 1) % len(impedance_profiles)
-            #     dyn_client.update_configuration(impedance_profiles[imp_idx])
-            #     rospy.loginfo(f"[Impedance Switch] Updated to: {impedance_profiles[imp_idx]}")
-            #     last_impedance_update = now
+        sm_state = sm.get_motion_state_transformed()
+        dpos = sm_state[:3] * (max_pos_speed / frequency)
+        drot_xyz = sm_state[3:] * (max_rot_speed / frequency)
+        drot = st.Rotation.from_euler('xyz', drot_xyz)
 
-            # Get SpaceMouse motion
-            sm_state = sm.get_motion_state_transformed()
-            dpos = sm_state[:3] * (max_pos_speed / frequency)
-            drot_xyz = sm_state[3:] * (max_rot_speed / frequency)
-            drot = st.Rotation.from_euler('xyz', drot_xyz)
+        target_pose[:3] += dpos
+        target_pose[3:] = (drot * st.Rotation.from_rotvec(target_pose[3:])).as_rotvec()
+        target_pose[2] = max(target_pose[2], 0.05)
 
-            # Update target pose
-            target_pose[:3] += dpos
-            target_pose[3:] = (drot * st.Rotation.from_rotvec(target_pose[3:])).as_rotvec()
-            target_pose[2] = max(target_pose[2], 0.05)  # safety Z min
+        dwidth = 0
+        if sm.is_button_pressed(0):
+            dwidth = -gripper_speed / frequency
+        if sm.is_button_pressed(1):
+            dwidth = gripper_speed / frequency
+        gripper_width = np.clip(gripper_width + dwidth, 0.0, max_gripper_width)
 
-            # Gripper emulation (for print/log only)
-            dwidth = 0
-            if sm.is_button_pressed(0):
-                dwidth = -gripper_speed / frequency
-            if sm.is_button_pressed(1):
-                dwidth = gripper_speed / frequency
-            gripper_width = np.clip(gripper_width + dwidth, 0.0, max_gripper_width)
+        publish_pose(pose_pub, target_pose)
 
-            # Send to ROS
-            publish_pose(pose_pub, target_pose)
-            print(f"[Iter {iter_idx}] Pose: {target_pose[:3]}, Gripper width: {gripper_width:.3f}", end='\r')
+        print(f"[Iter {iter_idx}] Pose: {target_pose[:3]}, Gripper width: {gripper_width:.3f}", end='\r')
+        precise_wait(t_cycle_end)
+        iter_idx += 1
 
-            precise_wait(t_cycle_end)
-            iter_idx += 1
 
 if __name__ == '__main__':
     try:

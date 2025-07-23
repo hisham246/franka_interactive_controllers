@@ -197,7 +197,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   }
 
   Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_.data());
-  ROS_INFO_STREAM("JointImpedanceFrankaController: target pose: " << pose_matrix);
+  ROS_INFO_STREAM(pose_matrix);
 
 }
 
