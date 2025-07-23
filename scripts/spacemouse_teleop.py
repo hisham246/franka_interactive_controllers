@@ -162,6 +162,7 @@ def main():
 
             # Get SpaceMouse motion
             sm_state = sm.get_motion_state_transformed()
+            # print(f"[DEBUG] Raw SpaceMouse state: {sm_state}")
             dpos = sm_state[:3] * (max_pos_speed / frequency)
             drot_xyz = sm_state[3:] * (max_rot_speed / frequency)
             drot = st.Rotation.from_euler('xyz', drot_xyz)
@@ -178,6 +179,9 @@ def main():
             if sm.is_button_pressed(1):
                 dwidth = gripper_speed / frequency
             gripper_width = np.clip(gripper_width + dwidth, 0.0, max_gripper_width)
+
+            print(f"[DEBUG] dpos: {dpos}, drot_xyz: {drot_xyz}")
+            print(f"[DEBUG] Updated target pose: {target_pose}")
 
             # Send to ROS
             publish_pose(pose_pub, target_pose)

@@ -164,9 +164,8 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   // pose_desired[13] += delta_y;
   // pose_desired[14] += delta_z;
   // cartesian_pose_handle_->setCommand(pose_desired);
-
   
-  cartesian_pose_handle_->setCommand(target_pose_);
+  cartesian_pose_handle_->setCommand(target_pose_d_);
 
   franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();

@@ -55,7 +55,7 @@ def publish_pose(publisher, pose):
     msg = Float64MultiArray()
     msg.data = T.T.ravel().tolist()
     print(f"Publishing pose: {msg.data}")
-    # publisher.publish(msg)
+    publisher.publish(msg)
 
 
 def main():
@@ -93,38 +93,42 @@ def main():
         iter_idx = 0
         stop = False
 
-    while not rospy.is_shutdown() and not stop:
-        t_cycle_end = t_start + (iter_idx + 1) * dt
-        t_sample = t_cycle_end - command_latency
+        while not rospy.is_shutdown() and not stop:
+            t_cycle_end = t_start + (iter_idx + 1) * dt
+            t_sample = t_cycle_end - command_latency
 
-        press_events = key_counter.get_press_events()
-        for key_stroke in press_events:
-            if key_stroke == KeyCode(char='q'):
-                stop = True
+            press_events = key_counter.get_press_events()
+            for key_stroke in press_events:
+                if key_stroke == KeyCode(char='q'):
+                    stop = True
 
-        precise_wait(t_sample)
+            precise_wait(t_sample)
 
-        sm_state = sm.get_motion_state_transformed()
-        dpos = sm_state[:3] * (max_pos_speed / frequency)
-        drot_xyz = sm_state[3:] * (max_rot_speed / frequency)
-        drot = st.Rotation.from_euler('xyz', drot_xyz)
+            sm_state = sm.get_motion_state_transformed()
+            print(f"[DEBUG] Raw SpaceMouse state: {sm_state}")
+            dpos = sm_state[:3] * (max_pos_speed / frequency)
+            drot_xyz = sm_state[3:] * (max_rot_speed / frequency)
+            drot = st.Rotation.from_euler('xyz', drot_xyz)
 
-        target_pose[:3] += dpos
-        target_pose[3:] = (drot * st.Rotation.from_rotvec(target_pose[3:])).as_rotvec()
-        target_pose[2] = max(target_pose[2], 0.05)
+            target_pose[:3] += dpos
+            target_pose[3:] = (drot * st.Rotation.from_rotvec(target_pose[3:])).as_rotvec()
+            target_pose[2] = max(target_pose[2], 0.05)
 
-        dwidth = 0
-        if sm.is_button_pressed(0):
-            dwidth = -gripper_speed / frequency
-        if sm.is_button_pressed(1):
-            dwidth = gripper_speed / frequency
-        gripper_width = np.clip(gripper_width + dwidth, 0.0, max_gripper_width)
+            print(f"[DEBUG] dpos: {dpos}, drot_xyz: {drot_xyz}")
+            print(f"[DEBUG] Updated target pose: {target_pose}")
 
-        publish_pose(pose_pub, target_pose)
+            dwidth = 0
+            if sm.is_button_pressed(0):
+                dwidth = -gripper_speed / frequency
+            if sm.is_button_pressed(1):
+                dwidth = gripper_speed / frequency
+            gripper_width = np.clip(gripper_width + dwidth, 0.0, max_gripper_width)
 
-        print(f"[Iter {iter_idx}] Pose: {target_pose[:3]}, Gripper width: {gripper_width:.3f}", end='\r')
-        precise_wait(t_cycle_end)
-        iter_idx += 1
+            publish_pose(pose_pub, target_pose)
+
+            print(f"[Iter {iter_idx}] Pose: {target_pose[:3]}, Gripper width: {gripper_width:.3f}", end='\r')
+            precise_wait(t_cycle_end)
+            iter_idx += 1
 
 
 if __name__ == '__main__':
