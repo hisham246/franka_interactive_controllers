@@ -1,10 +1,12 @@
 {
     "files.associations": {
+        "*.py": "python",
         "random": "cpp",
         "array": "cpp",
         "string": "cpp",
         "string_view": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "dense": "cpp"
     },
     "ros.distro": "noetic",
     "python.autoComplete.extraPaths": [

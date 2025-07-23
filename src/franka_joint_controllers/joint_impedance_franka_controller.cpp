@@ -9,6 +9,7 @@
 #include <controller_interface/controller_base.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
+#include <Eigen/Dense>
 
 #include <franka/robot_state.h>
 
@@ -167,9 +168,6 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   
   cartesian_pose_handle_->setCommand(target_pose_);
 
-  ROS_INFO_STREAM("JointImpedanceFrankaController: target pose: " << target_pose_);
-
-
   franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
   std::array<double, 7> gravity = model_handle_->getGravity();
@@ -197,6 +195,11 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   for (size_t i = 0; i < 7; ++i) {
     last_tau_d_[i] = tau_d_saturated[i] + gravity[i];
   }
+
+  Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(target_pose_.data());
+
+  ROS_INFO_STREAM("JointImpedanceFrankaController: target pose: " << pose_matrix);
+
 }
 
 std::array<double, 7> JointImpedanceFrankaController::saturateTorqueRate(
