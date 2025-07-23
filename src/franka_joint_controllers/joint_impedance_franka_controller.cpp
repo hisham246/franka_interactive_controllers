@@ -140,7 +140,7 @@ void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
   target_pose_d_ = target_pose_;
   initial_pose_ = target_pose_;
 
-  cartesian_pose_handle_->setCommand(target_pose_);
+  // cartesian_pose_handle_->setCommand(target_pose_);
 
 }
 
@@ -166,6 +166,9 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
 
   
   cartesian_pose_handle_->setCommand(target_pose_);
+
+  // ROS_INFO_STREAM("JointImpedanceFrankaController: target pose: " << target_pose_);
+
 
   franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
@@ -217,7 +220,6 @@ void JointImpedanceFrankaController::desiredPoseCallback(const std_msgs::Float64
     target_pose_d_[7] = 0;
     target_pose_d_[11] = 0;
     target_pose_d_[15] = 1;
-
 }
 
 }  // namespace franka_interactive_controllers
