@@ -189,7 +189,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     last_tau_d_[i] = tau_d_saturated[i] + gravity[i];
   }
 
-  Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_d_.data());
+  Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_.data());
   ROS_INFO_STREAM(pose_matrix);
 
 }
