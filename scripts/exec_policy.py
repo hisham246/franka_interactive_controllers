@@ -61,10 +61,10 @@ def main():
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
 
     # Compliance policy unet
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
 
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
@@ -188,13 +188,14 @@ def main():
                     lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                 result = policy.predict_action(obs_dict)
                 action = result['action_pred'][0].detach().to('cpu').numpy()
-                # assert action.shape[-1] == 16
-                assert action.shape[-1] == 10
-                action = get_real_umi_action(action, obs, action_pose_repr)
+                assert action.shape[-1] == 16
                 # assert action.shape[-1] == 10
-                assert action.shape[-1] == 7
+                action = get_real_umi_action(action, obs, action_pose_repr)
+                assert action.shape[-1] == 10
+                # assert action.shape[-1] == 7
                 del result
 
+            print("Waiting to get to the stop button...")
             time.sleep(3.0)  # wait to get to stop button for safety!
             print('Ready!')
 

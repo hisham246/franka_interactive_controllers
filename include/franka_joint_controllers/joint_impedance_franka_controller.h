@@ -12,6 +12,8 @@
 #include <realtime_tools/realtime_publisher.h>
 #include <ros/node_handle.h>
 #include <ros/time.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/Float64MultiArray.h>
 
 #include <franka_hw/franka_cartesian_command_interface.h>
 #include <franka_hw/franka_model_interface.h>
@@ -50,9 +52,17 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   double coriolis_factor_{1.0};
   std::array<double, 7> dq_filtered_;
   std::array<double, 16> initial_pose_;
+  std::array<double, 16> target_pose_;
+  std::array<double, 16> target_pose_d_;
 
   franka_hw::TriggerRate rate_trigger_{1.0};
   std::array<double, 7> last_tau_d_{};
+
+  // Desired pose subscriber
+  ros::Subscriber sub_desired_pose_;
+  void desiredPoseCallback(const std_msgs::Float64MultiArray& msg);
+
+
 };
 
 }  // namespace franka_interactive_controllers

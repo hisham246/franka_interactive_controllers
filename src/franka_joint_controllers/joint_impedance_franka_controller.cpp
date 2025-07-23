@@ -16,6 +16,11 @@ namespace franka_interactive_controllers {
 
 bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
                                            ros::NodeHandle& node_handle) {
+
+  sub_desired_pose_ = node_handle.subscribe(
+    "/joint_impedance_controller/desired_pose", 20, &JointImpedanceFrankaController::desiredPoseCallback, this,
+    ros::TransportHints().reliable().tcpNoDelay());
+
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
     ROS_ERROR("JointImpedanceFrankaController: Could not read parameter arm_id");
@@ -128,28 +133,39 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
 }
 
 void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
-  initial_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+
+  // initial_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+
+  target_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+  target_pose_d_ = target_pose_;
+  initial_pose_ = target_pose_;
+
+  cartesian_pose_handle_->setCommand(target_pose_);
+
 }
 
 void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
                                              const ros::Duration& period) {
-  if (vel_current_ < vel_max_) {
-    vel_current_ += period.toSec() * std::fabs(vel_max_ / acceleration_time_);
-  }
-  vel_current_ = std::fmin(vel_current_, vel_max_);
+  // if (vel_current_ < vel_max_) {
+  //   vel_current_ += period.toSec() * std::fabs(vel_max_ / acceleration_time_);
+  // }
+  // vel_current_ = std::fmin(vel_current_, vel_max_);
 
-  angle_ += period.toSec() * vel_current_ / std::fabs(radius_);
-  if (angle_ > 2 * M_PI) {
-    angle_ -= 2 * M_PI;
-  }
+  // angle_ += period.toSec() * vel_current_ / std::fabs(radius_);
+  // if (angle_ > 2 * M_PI) {
+  //   angle_ -= 2 * M_PI;
+  // }
 
-  double delta_y = radius_ * (1 - std::cos(angle_));
-  double delta_z = radius_ * std::sin(angle_);
+  // double delta_y = radius_ * (1 - std::cos(angle_));
+  // double delta_z = radius_ * std::sin(angle_);
 
-  std::array<double, 16> pose_desired = initial_pose_;
-  pose_desired[13] += delta_y;
-  pose_desired[14] += delta_z;
-  cartesian_pose_handle_->setCommand(pose_desired);
+  // std::array<double, 16> pose_desired = initial_pose_;
+  // pose_desired[13] += delta_y;
+  // pose_desired[14] += delta_z;
+  // cartesian_pose_handle_->setCommand(pose_desired);
+
+  
+  cartesian_pose_handle_->setCommand(target_pose_);
 
   franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
@@ -189,6 +205,19 @@ std::array<double, 7> JointImpedanceFrankaController::saturateTorqueRate(
     tau_d_saturated[i] = tau_J_d[i] + std::max(std::min(difference, kDeltaTauMax), -kDeltaTauMax);
   }
   return tau_d_saturated;
+}
+
+void JointImpedanceFrankaController::desiredPoseCallback(const std_msgs::Float64MultiArray& msg)
+{
+    for (size_t i=0; i < 16; i++){
+      target_pose_d_[i] = msg.data[i];
+    }
+
+    target_pose_d_[3] = 0;
+    target_pose_d_[7] = 0;
+    target_pose_d_[11] = 0;
+    target_pose_d_[15] = 1;
+
 }
 
 }  // namespace franka_interactive_controllers
