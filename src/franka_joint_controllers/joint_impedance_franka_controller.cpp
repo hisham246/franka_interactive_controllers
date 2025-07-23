@@ -167,7 +167,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   
   cartesian_pose_handle_->setCommand(target_pose_);
 
-  // ROS_INFO_STREAM("JointImpedanceFrankaController: target pose: " << target_pose_);
+  ROS_INFO_STREAM("JointImpedanceFrankaController: target pose: " << target_pose_);
 
 
   franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
