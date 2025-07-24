@@ -182,15 +182,12 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
       // if p val is negative, treat it as 0
       p_val = std::max(p_val, 0.);
       catmullRomSplineVelCmd(p_val, i, interval_length);
-
-      q_d_[i] = limited_joint_cmds_[i];
   }
 
 
   for (size_t i=0; i<7; i++){
-    q_[i] = joint_handles_[i].getPosition();
-    dq_[i] = joint_handles_[i].getVelocity();
-    dq_d_[i] = (limited_joint_cmds_[i] - q_d_[i]) / period.toSec();  
+      q_[i] = joint_handles_[i].getPosition();
+      dq_[i] = joint_handles_[i].getVelocity();
   }
 
 
@@ -340,17 +337,22 @@ void JointImpedanceFrankaController::catmullRomSplineVelCmd(const double &norm_p
         
         // calculate velocity step
         limited_joint_cmds_[joint_num] = last_commanded_pos_[joint_num] + (vel * interval);
+
+        q_d_[joint_num] = limited_joint_cmds_[joint_num];
+        dq_d_[joint_num] = vel;
     }
     else
     {
         for (int i=0; i<7; i++)
         {
             limited_joint_cmds_[i] = joint_cmds_[i];
+            q_d_[i] = joint_cmds_[i];      // hold current/last command
+            dq_d_[i] = 0.0;                // stop motion
         }
         
         is_executing_cmd_ = false;
     }
-    
+
 }
 
 bool JointImpedanceFrankaController::isGoalReached()
