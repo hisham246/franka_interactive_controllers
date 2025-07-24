@@ -40,21 +40,34 @@ class InitialPoseListener:
         return self.pose
 
 
+# def publish_pose(publisher, pose):
+#     """Publish a 4x4 homogeneous transform as Float64MultiArray (column-major for Franka)."""
+#     pos = pose[:3]
+#     rotvec = pose[3:]
+#     quat = R.from_rotvec(rotvec).as_quat()
+#     rotm = R.from_quat(quat).as_matrix()
+
+#     # Build homogeneous transform
+#     T = np.eye(4)
+#     T[:3, :3] = rotm
+#     T[:3, 3] = pos
+
+#     msg = Float64MultiArray()
+#     msg.data = T.T.ravel().tolist()
+#     print(f"Publishing pose: {msg.data}")
+#     publisher.publish(msg)
+
 def publish_pose(publisher, pose):
-    """Publish a 4x4 homogeneous transform as Float64MultiArray (column-major for Franka)."""
+    """Publish a Pose message (position + quaternion)."""
     pos = pose[:3]
     rotvec = pose[3:]
     quat = R.from_rotvec(rotvec).as_quat()
-    rotm = R.from_quat(quat).as_matrix()
 
-    # Build homogeneous transform
-    T = np.eye(4)
-    T[:3, :3] = rotm
-    T[:3, 3] = pos
+    msg = Pose()
+    msg.position.x, msg.position.y, msg.position.z = pos
+    msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w = quat
 
-    msg = Float64MultiArray()
-    msg.data = T.T.ravel().tolist()
-    print(f"Publishing pose: {msg.data}")
+    rospy.loginfo_once(f"Publishing pose to {publisher.name}")
     publisher.publish(msg)
 
 
@@ -73,7 +86,7 @@ def main():
     command_latency = dt / 2
 
     # Publisher for Cartesian pose
-    pose_pub = rospy.Publisher('/joint_impedance_controller/desired_pose', Float64MultiArray, queue_size=1)
+    pose_pub = rospy.Publisher('/joint_impedance_controller/desired_pose', Pose, queue_size=1)
     rospy.loginfo("ROS publisher ready.")
 
 
