@@ -198,7 +198,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
   std::array<double, 7> gravity = model_handle_->getGravity();
-  std::array<double, 7> current_tau;
+  // std::array<double, 7> current_tau;
 
 
   for (size_t i=0; i<7; i++){
@@ -207,8 +207,13 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   }
 
   for (size_t i=0; i<7; i++){
+    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
+  }
+
+
+  for (size_t i=0; i<7; i++){
     dq_d_[i] = 0.0;
-    current_tau[i] = joint_handles_[i].getEffort();
+    // current_tau[i] = joint_handles_[i].getEffort();
   }
 
   std::array<double, 7> tau_d_calculated;
@@ -219,10 +224,6 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   }
 
   std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
-
-  for (size_t i=0; i<7; i++){
-    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
-  }
 
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d_saturated[i]);
