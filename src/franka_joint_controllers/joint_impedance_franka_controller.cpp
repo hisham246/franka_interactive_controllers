@@ -112,6 +112,23 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
     return false;
   }
 
+  auto* state_interface = robot_hw->get<franka_hw::FrankaStateInterface>();
+  if (state_interface == nullptr) {
+    ROS_ERROR_STREAM(
+        "JointImpedanceFrankaController: Error getting state interface from hardware");
+    return false;
+  }
+  try {
+    state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
+        state_interface->getHandle(arm_id + "_robot"));
+  } catch (hardware_interface::HardwareInterfaceException& ex) {
+    ROS_ERROR_STREAM(
+        "JointImpedanceFrankaController: Exception getting state handle from interface: "
+        << ex.what());
+    return false;
+  }
+
+
   auto* effort_joint_interface = robot_hw->get<hardware_interface::EffortJointInterface>();
   if (effort_joint_interface == nullptr) {
     ROS_ERROR_STREAM(
@@ -130,38 +147,44 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
 
   std::fill(dq_filtered_.begin(), dq_filtered_.end(), 0);
 
+  _panda_ik_service = franka_interactive_controllers::PandaTracIK();
+  position_d_.setZero();
+  orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  position_d_target_.setZero();
+  orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+
   return true;
 }
 
 void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
 
-  target_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+
+  // Get robot current/initial joint state
+  franka::RobotState initial_state = state_handle_->getRobotState();
+  for (size_t i = 0; i < 7; i++) {
+    ik_joint_targets_[i] = initial_state.q[i];
+  }
+
+  Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
+
+  Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
+
+  // set desired point to current state
+  position_d_           = initial_transform.translation();
+  orientation_d_        = Eigen::Quaterniond(initial_transform.linear());
+  position_d_target_    = initial_transform.translation();
+  orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
+
+  // target_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
 
 }
 
 void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
                                              const ros::Duration& period) {
-  // if (vel_current_ < vel_max_) {
-  //   vel_current_ += period.toSec() * std::fabs(vel_max_ / acceleration_time_);
-  // }
-  // vel_current_ = std::fmin(vel_current_, vel_max_);
-
-  // angle_ += period.toSec() * vel_current_ / std::fabs(radius_);
-  // if (angle_ > 2 * M_PI) {
-  //   angle_ -= 2 * M_PI;
-  // }
-
-  // double delta_y = radius_ * (1 - std::cos(angle_));
-  // double delta_z = radius_ * std::sin(angle_);
-
-  // std::array<double, 16> pose_desired = initial_pose_;
-  // pose_desired[13] += delta_y;
-  // pose_desired[14] += delta_z;
-  // cartesian_pose_handle_->setCommand(pose_desired);
   
-  cartesian_pose_handle_->setCommand(target_pose_);
+  // cartesian_pose_handle_->setCommand(target_pose_d_);
 
-  franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
+  franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
   std::array<double, 7> gravity = model_handle_->getGravity();
 
@@ -170,12 +193,18 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * robot_state.dq[i];
   }
 
+  std::array<double, 7> desired_q{};
+  for (size_t i = 0; i < 7; i++) {
+    desired_q[i] = ik_joint_targets_[i];  // Always use the last solved IK
+  }
+
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; ++i) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
-                          k_gains_[i] * (robot_state.q_d[i] - robot_state.q[i]) +
+                          k_gains_[i] * (desired_q[i] - robot_state.q[i]) +
                           d_gains_[i] * (robot_state.dq_d[i] - dq_filtered_[i]);
   }
+
 
   // Maximum torque difference with a sampling rate of 1 kHz. The maximum torque rate is
   // 1000 * (1 / sampling_time).
@@ -205,14 +234,35 @@ std::array<double, 7> JointImpedanceFrankaController::saturateTorqueRate(
   return tau_d_saturated;
 }
 
-void JointImpedanceFrankaController::desiredPoseCallback(const std_msgs::Float64MultiArray& msg)
-{
+void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Pose& msg) {
 
-    ROS_INFO_STREAM("Received desired pose msg");
-    for (size_t i=0; i < 16; i++){
-      target_pose_[i] = msg.data[i];
+  std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
+
+  position_d_target_ << msg.position.x, msg.position.y, msg.position.z;
+
+  Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
+
+  orientation_d_target_.coeffs() << msg.orientation.x,
+                                    msg.orientation.y,
+                                    msg.orientation.z,
+                                    msg.orientation.w;
+
+  // Handle quaternion sign consistency to avoid jumps
+  if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
+    orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
+  }
+
+  // Perform IK here using the updated target
+  KDL::JntArray ik_result = _panda_ik_service.perform_ik(msg);
+
+  if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
+    ROS_INFO("IK valid, updating joint targets");
+    for (size_t i = 0; i < 7; i++) {
+      ik_joint_targets_[i] = ik_result(i);
     }
-
+  } else {
+    ROS_WARN("IK failed to find a solution");
+  }
 }
 
 }  // namespace franka_interactive_controllers

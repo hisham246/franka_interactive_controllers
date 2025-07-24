@@ -6,7 +6,8 @@
         "string": "cpp",
         "string_view": "cpp",
         "span": "cpp",
-        "dense": "cpp"
+        "dense": "cpp",
+        "memory": "cpp"
     },
     "ros.distro": "noetic",
     "python.autoComplete.extraPaths": [
