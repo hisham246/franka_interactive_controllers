@@ -58,20 +58,28 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   std::array<double, 7> dq_d_;
   std::array<double, 7> dq_;
   double q_filt_ {0.5};  // amount off target to add to desired
+  double epsilon_ = 0.0001;
+  double max_abs_vel_ = 2.1;
 
-  Eigen::Vector3d position_d_;
-  Eigen::Quaterniond orientation_d_;
-  Eigen::Vector3d position_d_target_;
-  Eigen::Quaterniond orientation_d_target_;
-  std::mutex position_and_orientation_d_target_mutex_;
+  ros::Time start_time_;
+
+  std::array<double, 7> limited_joint_cmds_;
+  std::array<double, 7> last_commanded_pos_;
+  std::array<double, 7> iters_;
+  std::array<double, 7> joint_cmds_;
+
+  // 7 by 4 matrix for coefficients for each franka panda joint
+  std::array<std::array<double, 4>, 7> vel_catmull_coeffs_first_spline_;
+  std::array<std::array<double, 4>, 7> vel_catmull_coeffs_second_spline_;
+  std::array<double, 7> calc_max_pos_diffs;
 
   std::vector<double> k_gains_;
   std::vector<double> d_gains_;
   double coriolis_factor_{1.0};
   std::array<double, 7> dq_filtered_;
-  std::array<double, 16> initial_pose_;
-  std::array<double, 16> target_pose_;
-  geometry_msgs::Pose target_pose_d_;
+  // std::array<double, 16> initial_pose_;
+  // std::array<double, 16> target_pose_;
+  geometry_msgs::Pose target_pose_;
 
   franka_hw::TriggerRate rate_trigger_{1.0};
   std::array<double, 7> last_tau_d_{};
@@ -81,9 +89,16 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   void desiredPoseCallback(const geometry_msgs::Pose& msg);
 
   // IK Integration
-  franka_interactive_controllers::PandaTracIK _panda_ik_service;
+  franka_interactive_controllers::PandaTracIK panda_ik_service_;
+  KDL::JntArray joints_result_;
   std::array<double, 7> ik_joint_targets_{};
   bool is_executing_cmd_ = false;
+
+  std::array<double, 4> catmullRomSpline(const double &tau, const std::array<double,4> &points);
+  double calcSplinePolynomial(const std::array<double,4> &coeffs, const double &x);
+  void catmullRomSplineVelCmd(const double &norm_pos, const int &joint_num, const double &interval);
+  bool isGoalReached();
+
 
 
 };

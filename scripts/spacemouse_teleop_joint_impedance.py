@@ -67,7 +67,7 @@ def publish_pose(publisher, pose):
     msg.position.x, msg.position.y, msg.position.z = pos
     msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w = quat
 
-    rospy.loginfo_once(f"Publishing pose to {publisher.name}")
+    rospy.loginfo_once(f"Publishing pose", msg)
     publisher.publish(msg)
 
 

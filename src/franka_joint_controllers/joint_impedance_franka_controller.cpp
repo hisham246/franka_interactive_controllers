@@ -97,22 +97,6 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
     return false;
   }
 
-  // auto* cartesian_pose_interface = robot_hw->get<franka_hw::FrankaPoseCartesianInterface>();
-  // if (cartesian_pose_interface == nullptr) {
-  //   ROS_ERROR_STREAM(
-  //       "JointImpedanceFrankaController: Error getting cartesian pose interface from hardware");
-  //   return false;
-  // }
-  // try {
-  //   cartesian_pose_handle_ = std::make_unique<franka_hw::FrankaCartesianPoseHandle>(
-  //       cartesian_pose_interface->getHandle(arm_id + "_robot"));
-  // } catch (hardware_interface::HardwareInterfaceException& ex) {
-  //   ROS_ERROR_STREAM(
-  //       "JointImpedanceFrankaController: Exception getting cartesian pose handle from interface: "
-  //       << ex.what());
-  //   return false;
-  // }
-
   auto* state_interface = robot_hw->get<franka_hw::FrankaStateInterface>();
   if (state_interface == nullptr) {
     ROS_ERROR_STREAM(
@@ -148,45 +132,22 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
 
   std::fill(dq_filtered_.begin(), dq_filtered_.end(), 0);
 
-  _panda_ik_service = franka_interactive_controllers::PandaTracIK();
-  position_d_.setZero();
-  orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-  position_d_target_.setZero();
-  orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  panda_ik_service_ = franka_interactive_controllers::PandaTracIK();
+  is_executing_cmd_ = false;
 
   return true;
 }
 
 void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
 
-
-  // Get robot current/initial joint state
-  franka::RobotState initial_state = state_handle_->getRobotState();
-  // for (size_t i = 0; i < 7; i++) {
-  //   ik_joint_targets_[i] = initial_state.q[i];
-  // }
-
-  Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
-
-  Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
-
-  // set desired point to current state
-  position_d_           = initial_transform.translation();
-  orientation_d_        = Eigen::Quaterniond(initial_transform.linear());
-  position_d_target_    = initial_transform.translation();
-  orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
-
-
-  for (size_t i = 0; i < 7; ++i) {
-    q_[i] = joint_handles_[i].getPosition();
-    q_d_[i] = joint_handles_[i].getPosition();
-    target_q_d_[i] = joint_handles_[i].getPosition();
-    dq_[i] = joint_handles_[i].getVelocity();
-    dq_d_[i] = joint_handles_[i].getVelocity();
+  joints_result_.resize(7);
+  // set joint positions to current position, to prevent movement
+  for (int i = 0; i < 7; i++)
+  {
+      joints_result_(i) = joint_handles_[i].getPosition();
+      last_commanded_pos_[i] = joints_result_(i);
+      iters_[i] = 0;
   }
-
-
-  // target_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
 
 }
 
@@ -200,22 +161,40 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   std::array<double, 7> gravity = model_handle_->getGravity();
   // std::array<double, 7> current_tau;
 
+  double interval_length = period.toSec();
+  // get joint commands in radians from inverse kinematics
+  for (int i = 0; i < 7; i++)
+  {
+      target_q_d_[i] = joints_result_(i);
+  }
+  // if goal is reached and robot is originally executing command, we are done
+  if (isGoalReached() && is_executing_cmd_)
+  {
+      is_executing_cmd_ = false;
+  }
+
+  double current_pos, p_val;
+  for (int i=0; i<7; i++)
+  {
+      current_pos = joint_handles_[i].getPosition();
+      // norm position
+      p_val = 2 - (2 * (abs(joint_cmds_[i] - current_pos) / abs(calc_max_pos_diffs[i])));
+      // if p val is negative, treat it as 0
+      p_val = std::max(p_val, 0.);
+      catmullRomSplineVelCmd(p_val, i, interval_length);
+
+      q_d_[i] = limited_joint_cmds_[i];
+  }
+
 
   for (size_t i=0; i<7; i++){
     q_[i] = joint_handles_[i].getPosition();
     dq_[i] = joint_handles_[i].getVelocity();
-  }
-
-  for (size_t i=0; i<7; i++){
-    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
+    dq_d_[i] = (limited_joint_cmds_[i] - q_d_[i]) / period.toSec();  
   }
 
 
-  for (size_t i=0; i<7; i++){
-    dq_d_[i] = 0.0;
-    // current_tau[i] = joint_handles_[i].getEffort();
-  }
-
+  // Compute impedance control torques
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
@@ -228,6 +207,174 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d_saturated[i]);
   }
+
+  for (int i = 0; i < 7; i++) {
+    last_commanded_pos_[i] = limited_joint_cmds_[i];
+}
+
+}
+
+std::array<double, 7> JointImpedanceFrankaController::saturateTorqueRate(
+    const std::array<double, 7>& tau_d_calculated,
+    const std::array<double, 7>& tau_J_d) {  // NOLINT (readability-identifier-naming)
+  std::array<double, 7> tau_d_saturated{};
+  for (size_t i = 0; i < 7; i++) {
+    double difference = tau_d_calculated[i] - tau_J_d[i];
+    tau_d_saturated[i] = tau_J_d[i] + std::max(std::min(difference, kDeltaTauMax), -kDeltaTauMax);
+  }
+  return tau_d_saturated;
+}
+
+void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Pose &target_pose) {
+
+   if (is_executing_cmd_) 
+    {
+        ROS_ERROR("JointImpedanceFrankaController: Still executing command!");
+        return;
+        // panda is still executing command, cannot publish yet to this topic.
+    }
+    target_pose_.orientation.w = target_pose.orientation.w;
+    target_pose_.orientation.x = target_pose.orientation.x;
+    target_pose_.orientation.y = target_pose.orientation.y;
+    target_pose_.orientation.z = target_pose.orientation.z;
+
+    target_pose_.position.x = target_pose.position.x;
+    target_pose_.position.y = target_pose.position.y;
+    target_pose_.position.z = target_pose.position.z;
+
+    // use tracik to get joint positions from target pose
+    KDL::JntArray ik_result = panda_ik_service_.perform_ik(target_pose_);
+    joints_result_ = (panda_ik_service_.is_valid) ? ik_result : joints_result_; 
+    
+    if (joints_result_.rows() != 7)
+    {   
+        ROS_ERROR("JointImpedanceFrankaController: Wrong Amount of Rows Received From TRACIK");
+        return;
+    }
+    // for catmull rom spline, break up into two splines
+    // spline 1 - increases to max provided velocity
+    // spline 2 - decreases down to 0 smoothly
+    std::array<double,4> velocity_points_first_spline;
+    std::array<double,4> velocity_points_second_spline;
+    double max_vel;
+    for (int i=0; i<7; i++)
+    {
+        // get current position
+        double cur_pos = joint_handles_[i].getPosition();
+        // difference between current position and desired position from ik
+        calc_max_pos_diffs[i] = joints_result_(i) - cur_pos;
+        // if calc_max_poss_diff is negative, flip sign of max vel
+        max_vel = calc_max_pos_diffs[i] < 0 ? -max_abs_vel_ : max_abs_vel_;
+        int sign = calc_max_pos_diffs[i] < 0 ? -1 : 1;
+        // get p_i-2, p_i-1, p_i, p+i+1 for catmull rom spline
+        
+        velocity_points_first_spline = {0, 0.3*sign, max_vel, max_vel};
+        velocity_points_second_spline = {max_vel, max_vel, 0, 0};
+
+        // tau of 0.3
+        
+        // velocity as function of position
+        vel_catmull_coeffs_first_spline_[i] = catmullRomSpline(0.3, velocity_points_first_spline);
+        vel_catmull_coeffs_second_spline_[i] = catmullRomSpline(0.3, velocity_points_second_spline);
+
+    }
+    is_executing_cmd_ = true;
+    for (int i = 0; i < 7; i++)
+    {
+        iters_[i] = 0;
+    }
+    start_time_ = ros::Time::now();
+}
+
+std::array<double, 4> JointImpedanceFrankaController::catmullRomSpline(const double &tau, const std::array<double,4> &points)
+{
+    // catmullRomSpline calculation for any 4 generic points
+    // result array for 4 coefficients of cubic polynomial
+    std::array<double, 4> coeffs;
+    // 4 by 4 matrix for calculating coefficients
+    std::array<std::array<double, 4>, 4> catmullMat = {{{0, 1, 0, 0}, {-tau, 0, tau, 0},
+                                                        {2*tau, tau-3, 3 - (2*tau), -tau}, 
+                                                        {-tau,2-tau,tau-2,tau}}};
+    // calculation of coefficients
+    for (int i=0; i<4; i++)
+    {
+        coeffs[i] = (points[0]*catmullMat[i][0]) + (points[1]*catmullMat[i][1]) 
+                    + (points[2]*catmullMat[i][2]) + (points[3]*catmullMat[i][3]);
+    }
+    return coeffs;
+}
+
+double JointImpedanceFrankaController::calcSplinePolynomial(const std::array<double,4> &coeffs, const double &x)
+{
+    // function that calculates third degree polynomial given input x and 
+    // 4 coefficients
+    double output = 0.;   
+    int power = 0;
+    for (int i=0; i<4; i++)
+    {
+        output+=(coeffs[i]*(pow(x, power)));
+        power++;
+    }
+    return output;
+}
+
+void JointImpedanceFrankaController::catmullRomSplineVelCmd(const double &norm_pos, const int &joint_num,
+                                                    const double &interval)
+{
+    // individual joints
+    // velocity is expressed as a function of position (position is normalized)
+    if (norm_pos <= 2 && is_executing_cmd_)
+    {
+        // valid position and is executing a command
+        double vel;
+        if (norm_pos < 1)
+        {
+            // use first spline to get velocity
+            vel = calcSplinePolynomial(vel_catmull_coeffs_first_spline_[joint_num], norm_pos);
+        }
+        else 
+        {
+            // use second spline to get velocity
+            vel = calcSplinePolynomial(vel_catmull_coeffs_second_spline_[joint_num], norm_pos - 1);
+        }
+        
+        // calculate velocity step
+        limited_joint_cmds_[joint_num] = last_commanded_pos_[joint_num] + (vel * interval);
+    }
+    else
+    {
+        for (int i=0; i<7; i++)
+        {
+            limited_joint_cmds_[i] = joint_cmds_[i];
+        }
+        
+        is_executing_cmd_ = false;
+    }
+    
+}
+
+bool JointImpedanceFrankaController::isGoalReached()
+{
+    // sees if goal is reached given a distance threshold epsilon
+    // l2 norm is used for overall distance
+    double err = 0;
+    for (int i = 0; i < 7; i++)
+    {
+        err += pow(joint_handles_[i].getPosition() - joints_result_(i), 2);
+    }
+    err = sqrt(err);
+    return err <= epsilon_;
+
+}
+
+}  // namespace franka_interactive_controllers
+
+PLUGINLIB_EXPORT_CLASS(franka_interactive_controllers::JointImpedanceFrankaController,
+                       controller_interface::ControllerBase)
+
+
+
+// The following code is commented out from the update as it is not part of the current implementation
 
   // double alpha = 0.99;
   // for (size_t i = 0; i < 7; i++) {
@@ -296,51 +443,3 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
 
   // Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_.data());
   // ROS_INFO_STREAM(pose_matrix);
-
-}
-
-std::array<double, 7> JointImpedanceFrankaController::saturateTorqueRate(
-    const std::array<double, 7>& tau_d_calculated,
-    const std::array<double, 7>& tau_J_d) {  // NOLINT (readability-identifier-naming)
-  std::array<double, 7> tau_d_saturated{};
-  for (size_t i = 0; i < 7; i++) {
-    double difference = tau_d_calculated[i] - tau_J_d[i];
-    tau_d_saturated[i] = tau_J_d[i] + std::max(std::min(difference, kDeltaTauMax), -kDeltaTauMax);
-  }
-  return tau_d_saturated;
-}
-
-void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Pose& msg) {
-
-  std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
-
-  position_d_target_ << msg.position.x, msg.position.y, msg.position.z;
-
-  Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
-
-  orientation_d_target_.coeffs() << msg.orientation.x,
-                                    msg.orientation.y,
-                                    msg.orientation.z,
-                                    msg.orientation.w;
-
-  // Handle quaternion sign consistency to avoid jumps
-  if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
-    orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
-  }
-
-  KDL::JntArray ik_result = _panda_ik_service.perform_ik(msg);
-
-  if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
-    // ROS_INFO("IK valid, updating joint targets");
-    for (size_t i = 0; i < 7; i++) {
-      target_q_d_[i] = ik_result(i);
-    }
-  } else {
-    ROS_WARN("IK failed to find a solution");
-  }
-}
-
-}  // namespace franka_interactive_controllers
-
-PLUGINLIB_EXPORT_CLASS(franka_interactive_controllers::JointImpedanceFrankaController,
-                       controller_interface::ControllerBase)
