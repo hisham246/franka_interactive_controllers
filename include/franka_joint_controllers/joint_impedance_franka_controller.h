@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-
+#include <mutex>
 #include <controller_interface/multi_interface_controller.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
@@ -13,12 +13,14 @@
 #include <ros/node_handle.h>
 #include <ros/time.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Pose.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <franka_utils/panda_trac_ik.h>
 #include <Eigen/Dense>
 
 #include <franka_hw/franka_cartesian_command_interface.h>
 #include <franka_hw/franka_model_interface.h>
+#include <franka_hw/franka_state_interface.h>
 #include <franka_hw/trigger_rate.h>
 
 namespace franka_interactive_controllers {
@@ -49,6 +51,7 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   double vel_max_{0.05};
   double angle_{0.0};
   double vel_current_{0.0};
+  double alpha_q_{0.05};
 
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;

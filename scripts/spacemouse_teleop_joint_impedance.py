@@ -75,7 +75,7 @@ def main():
     rospy.init_node('teleop_spacemouse_ros_node')
 
     # Parameters
-    frequency = rospy.get_param('~frequency', 1000.0)
+    frequency = rospy.get_param('~frequency', 10.0)
     max_pos_speed = rospy.get_param('~max_pos_speed', 0.25)
     max_rot_speed = rospy.get_param('~max_rot_speed', 0.6)
     gripper_speed = rospy.get_param('~gripper_speed', 0.05)

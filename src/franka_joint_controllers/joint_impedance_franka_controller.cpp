@@ -3,6 +3,7 @@
 // #include <franka_interactive_controllers/joint_impedance_example_controller.h>
 #include <joint_impedance_franka_controller.h>
 
+#include <array>
 #include <cmath>
 #include <memory>
 
@@ -193,16 +194,51 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * robot_state.dq[i];
   }
 
-  std::array<double, 7> desired_q{};
-  for (size_t i = 0; i < 7; i++) {
-    desired_q[i] = ik_joint_targets_[i];  // Always use the last solved IK
+  // std::array<double, 7> desired_q{};
+  // for (size_t i = 0; i < 7; i++) {
+  //   desired_q[i] = ik_joint_targets_[i];  // Always use the last solved IK
+  // }
+
+  // // best and most recommended method for trajectory computation after
+  // // inverse kinematics calculations
+  // // normalize position, we need to do this separately for every joint
+  // double current_pos, p_val;
+  // for (int i=0; i<7; i++)
+  // {
+  //     current_pos = _position_joint_handles[i].getPosition();
+  //     // norm position
+  //     p_val = 2 - (2 * (abs(_joint_cmds[i] - current_pos) / abs(calc_max_pos_diffs[i])));
+  //     // if p val is negative, treat it as 0
+  //     p_val = std::max(p_val, 0.);
+  //     catmullRomSplineVelCmd(p_val, i, interval_length);
+  // }
+
+  geometry_msgs::Pose target_msg;
+  target_msg.position.x = position_d_target_.x();
+  target_msg.position.y = position_d_target_.y();
+  target_msg.position.z = position_d_target_.z();
+  target_msg.orientation.x = orientation_d_target_.x();
+  target_msg.orientation.y = orientation_d_target_.y();
+  target_msg.orientation.z = orientation_d_target_.z();
+  target_msg.orientation.w = orientation_d_target_.w();
+
+  KDL::JntArray ik_result = _panda_ik_service.perform_ik(target_msg);
+
+  if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
+    double alpha_q = 0.05;  // blending factor for smoothness
+    for (size_t i = 0; i < 7; i++) {
+      ik_joint_targets_[i] =
+          alpha_q * ik_result(i) + (1.0 - alpha_q) * ik_joint_targets_[i];
+    }
+  } else {
+    ROS_WARN_THROTTLE(1.0, "IK failed to find a solution, keeping last valid joint targets.");
   }
 
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; ++i) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
-                          k_gains_[i] * (desired_q[i] - robot_state.q[i]) +
-                          d_gains_[i] * (robot_state.dq_d[i] - dq_filtered_[i]);
+                          k_gains_[i] * (ik_joint_targets_[i] - robot_state.q[i]) +
+                          d_gains_[i] * (0.0 - dq_filtered_[i]);
   }
 
 
@@ -250,18 +286,6 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
   // Handle quaternion sign consistency to avoid jumps
   if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
     orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
-  }
-
-  // Perform IK here using the updated target
-  KDL::JntArray ik_result = _panda_ik_service.perform_ik(msg);
-
-  if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
-    ROS_INFO("IK valid, updating joint targets");
-    for (size_t i = 0; i < 7; i++) {
-      ik_joint_targets_[i] = ik_result(i);
-    }
-  } else {
-    ROS_WARN("IK failed to find a solution");
   }
 }
 
