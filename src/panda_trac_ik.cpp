@@ -18,7 +18,7 @@ PandaTracIK::PandaTracIK() : _urdf_param_string("/robot_description"), _secs_tim
         _nominal_joint_arr = nullptr;
         return;
     }
-    _panda_trac_ik_solver = std::make_shared<TRAC_IK::TRAC_IK>(name + "_link0", name + "_hand", _urdf_param_string,
+    _panda_trac_ik_solver = std::make_shared<TRAC_IK::TRAC_IK>(name + "_link0", name + "_link8", _urdf_param_string,
                                                                _secs_timeout, _error, TRAC_IK::Distance);
 
     KDL::JntArray ll, ul;
