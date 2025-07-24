@@ -52,6 +52,12 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   double angle_{0.0};
   double vel_current_{0.0};
   double alpha_q_{0.05};
+  std::array<double, 7> q_d_;
+  std::array<double, 7> q_;
+  std::array<double, 7> target_q_d_;
+  std::array<double, 7> dq_d_;
+  std::array<double, 7> dq_;
+  double q_filt_ {0.5};  // amount off target to add to desired
 
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;

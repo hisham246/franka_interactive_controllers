@@ -162,9 +162,9 @@ void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
 
   // Get robot current/initial joint state
   franka::RobotState initial_state = state_handle_->getRobotState();
-  for (size_t i = 0; i < 7; i++) {
-    ik_joint_targets_[i] = initial_state.q[i];
-  }
+  // for (size_t i = 0; i < 7; i++) {
+  //   ik_joint_targets_[i] = initial_state.q[i];
+  // }
 
   Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
 
@@ -175,6 +175,16 @@ void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
   orientation_d_        = Eigen::Quaterniond(initial_transform.linear());
   position_d_target_    = initial_transform.translation();
   orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
+
+
+  for (size_t i = 0; i < 7; ++i) {
+    q_[i] = joint_handles_[i].getPosition();
+    q_d_[i] = joint_handles_[i].getPosition();
+    target_q_d_[i] = joint_handles_[i].getPosition();
+    dq_[i] = joint_handles_[i].getVelocity();
+    dq_d_[i] = joint_handles_[i].getVelocity();
+  }
+
 
   // target_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
 
@@ -188,11 +198,40 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
   std::array<double, 7> gravity = model_handle_->getGravity();
+  std::array<double, 7> current_tau;
 
-  double alpha = 0.99;
-  for (size_t i = 0; i < 7; i++) {
-    dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * robot_state.dq[i];
+
+  for (size_t i=0; i<7; i++){
+    q_[i] = joint_handles_[i].getPosition();
+    dq_[i] = joint_handles_[i].getVelocity();
   }
+
+  for (size_t i=0; i<7; i++){
+    dq_d_[i] = 0.0;
+    current_tau[i] = joint_handles_[i].getEffort();
+  }
+
+  std::array<double, 7> tau_d_calculated;
+  for (size_t i = 0; i < 7; i++) {
+    tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
+                          k_gains_[i] * (q_d_[i] - q_[i]) +
+                          d_gains_[i] * (dq_d_[i] - dq_[i]);
+  }
+
+  std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
+
+  for (size_t i=0; i<7; i++){
+    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
+  }
+
+  for (size_t i = 0; i < 7; ++i) {
+    joint_handles_[i].setCommand(tau_d_saturated[i]);
+  }
+
+  // double alpha = 0.99;
+  // for (size_t i = 0; i < 7; i++) {
+  //   dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * robot_state.dq[i];
+  // }
 
   // std::array<double, 7> desired_q{};
   // for (size_t i = 0; i < 7; i++) {
@@ -213,46 +252,46 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   //     catmullRomSplineVelCmd(p_val, i, interval_length);
   // }
 
-  geometry_msgs::Pose target_msg;
-  target_msg.position.x = position_d_target_.x();
-  target_msg.position.y = position_d_target_.y();
-  target_msg.position.z = position_d_target_.z();
-  target_msg.orientation.x = orientation_d_target_.x();
-  target_msg.orientation.y = orientation_d_target_.y();
-  target_msg.orientation.z = orientation_d_target_.z();
-  target_msg.orientation.w = orientation_d_target_.w();
+  // geometry_msgs::Pose target_msg;
+  // target_msg.position.x = position_d_target_.x();
+  // target_msg.position.y = position_d_target_.y();
+  // target_msg.position.z = position_d_target_.z();
+  // target_msg.orientation.x = orientation_d_target_.x();
+  // target_msg.orientation.y = orientation_d_target_.y();
+  // target_msg.orientation.z = orientation_d_target_.z();
+  // target_msg.orientation.w = orientation_d_target_.w();
 
-  KDL::JntArray ik_result = _panda_ik_service.perform_ik(target_msg);
+  // KDL::JntArray ik_result = _panda_ik_service.perform_ik(target_msg);
 
-  if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
-    double alpha_q = 0.05;  // blending factor for smoothness
-    for (size_t i = 0; i < 7; i++) {
-      ik_joint_targets_[i] =
-          alpha_q * ik_result(i) + (1.0 - alpha_q) * ik_joint_targets_[i];
-    }
-  } else {
-    ROS_WARN_THROTTLE(1.0, "IK failed to find a solution, keeping last valid joint targets.");
-  }
+  // if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
+  //   double alpha_q = 0.05;  // blending factor for smoothness
+  //   for (size_t i = 0; i < 7; i++) {
+  //     ik_joint_targets_[i] =
+  //         alpha_q * ik_result(i) + (1.0 - alpha_q) * ik_joint_targets_[i];
+  //   }
+  // } else {
+  //   ROS_WARN_THROTTLE(1.0, "IK failed to find a solution, keeping last valid joint targets.");
+  // }
 
-  std::array<double, 7> tau_d_calculated;
-  for (size_t i = 0; i < 7; ++i) {
-    tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
-                          k_gains_[i] * (ik_joint_targets_[i] - robot_state.q[i]) +
-                          d_gains_[i] * (0.0 - dq_filtered_[i]);
-  }
+  // std::array<double, 7> tau_d_calculated;
+  // for (size_t i = 0; i < 7; ++i) {
+  //   tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
+  //                         k_gains_[i] * (ik_joint_targets_[i] - robot_state.q[i]) +
+  //                         d_gains_[i] * (0.0 - dq_filtered_[i]);
+  // }
 
 
-  // Maximum torque difference with a sampling rate of 1 kHz. The maximum torque rate is
-  // 1000 * (1 / sampling_time).
-  std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
+  // // Maximum torque difference with a sampling rate of 1 kHz. The maximum torque rate is
+  // // 1000 * (1 / sampling_time).
+  // std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
 
-  for (size_t i = 0; i < 7; ++i) {
-    joint_handles_[i].setCommand(tau_d_saturated[i]);
-  }
+  // for (size_t i = 0; i < 7; ++i) {
+  //   joint_handles_[i].setCommand(tau_d_saturated[i]);
+  // }
 
-  for (size_t i = 0; i < 7; ++i) {
-    last_tau_d_[i] = tau_d_saturated[i] + gravity[i];
-  }
+  // for (size_t i = 0; i < 7; ++i) {
+  //   last_tau_d_[i] = tau_d_saturated[i] + gravity[i];
+  // }
 
   // Eigen::Matrix4d pose_matrix = Eigen::Map<const Eigen::Matrix4d>(target_pose_.data());
   // ROS_INFO_STREAM(pose_matrix);
@@ -286,6 +325,17 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
   // Handle quaternion sign consistency to avoid jumps
   if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
     orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
+  }
+
+  KDL::JntArray ik_result = _panda_ik_service.perform_ik(msg);
+
+  if (_panda_ik_service.is_valid && ik_result.rows() == 7) {
+    // ROS_INFO("IK valid, updating joint targets");
+    for (size_t i = 0; i < 7; i++) {
+      target_q_d_[i] = ik_result(i);
+    }
+  } else {
+    ROS_WARN("IK failed to find a solution");
   }
 }
 
