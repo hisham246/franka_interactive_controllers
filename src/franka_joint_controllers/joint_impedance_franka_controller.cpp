@@ -96,21 +96,21 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
     return false;
   }
 
-  auto* cartesian_pose_interface = robot_hw->get<franka_hw::FrankaPoseCartesianInterface>();
-  if (cartesian_pose_interface == nullptr) {
-    ROS_ERROR_STREAM(
-        "JointImpedanceFrankaController: Error getting cartesian pose interface from hardware");
-    return false;
-  }
-  try {
-    cartesian_pose_handle_ = std::make_unique<franka_hw::FrankaCartesianPoseHandle>(
-        cartesian_pose_interface->getHandle(arm_id + "_robot"));
-  } catch (hardware_interface::HardwareInterfaceException& ex) {
-    ROS_ERROR_STREAM(
-        "JointImpedanceFrankaController: Exception getting cartesian pose handle from interface: "
-        << ex.what());
-    return false;
-  }
+  // auto* cartesian_pose_interface = robot_hw->get<franka_hw::FrankaPoseCartesianInterface>();
+  // if (cartesian_pose_interface == nullptr) {
+  //   ROS_ERROR_STREAM(
+  //       "JointImpedanceFrankaController: Error getting cartesian pose interface from hardware");
+  //   return false;
+  // }
+  // try {
+  //   cartesian_pose_handle_ = std::make_unique<franka_hw::FrankaCartesianPoseHandle>(
+  //       cartesian_pose_interface->getHandle(arm_id + "_robot"));
+  // } catch (hardware_interface::HardwareInterfaceException& ex) {
+  //   ROS_ERROR_STREAM(
+  //       "JointImpedanceFrankaController: Exception getting cartesian pose handle from interface: "
+  //       << ex.what());
+  //   return false;
+  // }
 
   auto* state_interface = robot_hw->get<franka_hw::FrankaStateInterface>();
   if (state_interface == nullptr) {

@@ -38,10 +38,10 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
       const std::array<double, 7>& tau_d_calculated,
       const std::array<double, 7>& tau_J_d);  // NOLINT (readability-identifier-naming)
 
-  std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
+  // std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
+  std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
   std::vector<hardware_interface::JointHandle> joint_handles_;
-  std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
 
   static constexpr double kDeltaTauMax{1.0};
   double radius_{0.1};
