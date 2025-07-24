@@ -26,7 +26,7 @@ namespace franka_interactive_controllers {
 class JointImpedanceFrankaController : public controller_interface::MultiInterfaceController<
                                             franka_hw::FrankaModelInterface,
                                             hardware_interface::EffortJointInterface,
-                                            franka_hw::FrankaPoseCartesianInterface> {
+                                            franka_hw::FrankaStateInterface> {
  public:
   bool init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle& node_handle) override;
   void starting(const ros::Time&) override;
