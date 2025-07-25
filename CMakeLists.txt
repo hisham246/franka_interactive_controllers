@@ -81,6 +81,7 @@ set(H_FILES ${INCLUDE_DIR}/franka_cartesian_controllers/cartesian_pose_impedance
             ${INCLUDE_DIR}/franka_motion_generators/libfranka_joint_motion_generator.h
             ${INCLUDE_DIR}/franka_utils/pseudo_inversion.h
             ${INCLUDE_DIR}/franka_utils/kinematics_utils.hpp
+            ${INCLUDE_DIR}/franka_utils/franka_ik_He.hpp
             ${INCLUDE_DIR}/franka_utils/panda_trac_ik.h)
 
 

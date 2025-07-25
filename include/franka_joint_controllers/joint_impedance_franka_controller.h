@@ -68,6 +68,12 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   std::array<double, 7> iters_;
   std::array<double, 7> joint_cmds_;
 
+  Eigen::Vector3d position_d_;
+  Eigen::Quaterniond orientation_d_;
+  Eigen::Vector3d position_d_target_;
+  Eigen::Quaterniond orientation_d_target_;
+  std::mutex position_and_orientation_d_target_mutex_;
+
   // 7 by 4 matrix for coefficients for each franka panda joint
   std::array<std::array<double, 4>, 7> vel_catmull_coeffs_first_spline_;
   std::array<std::array<double, 4>, 7> vel_catmull_coeffs_second_spline_;
@@ -86,7 +92,10 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
 
   // Desired pose subscriber
   ros::Subscriber sub_desired_pose_;
-  void desiredPoseCallback(const geometry_msgs::Pose& msg);
+  ros::Subscriber sub_joint_positions_;
+  void desiredPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
+  void jointPositionsCallback(const std_msgs::Float64MultiArray& msg);
+  std::array<double, 7> runJointPositionController();
 
   // IK Integration
   franka_interactive_controllers::PandaTracIK panda_ik_service_;
@@ -98,8 +107,6 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   double calcSplinePolynomial(const std::array<double,4> &coeffs, const double &x);
   void catmullRomSplineVelCmd(const double &norm_pos, const int &joint_num, const double &interval);
   bool isGoalReached();
-
-
 
 };
 
