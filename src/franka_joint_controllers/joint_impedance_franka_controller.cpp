@@ -1,6 +1,7 @@
 // Copyright (c) 2017 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
 // #include <franka_interactive_controllers/joint_impedance_example_controller.h>
+#include <pinocchio/fwd.hpp>
 #include <joint_impedance_franka_controller.h>
 
 #include <array>
@@ -13,7 +14,14 @@
 #include <Eigen/Dense>
 
 #include <franka/robot_state.h>
-#include <franka_utils/franka_ik_He.hpp>
+// #include <franka_utils/franka_ik_He.hpp>
+#include <pinocchio/parsers/urdf.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/joint-configuration.hpp>
+#include <pinocchio/spatial/explog.hpp>
+
 
 namespace franka_interactive_controllers {
 
@@ -130,13 +138,39 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
 
   std::fill(dq_filtered_.begin(), dq_filtered_.end(), 0);
 
-  panda_ik_service_ = franka_interactive_controllers::PandaTracIK();
-  is_executing_cmd_ = false;
+  // Initializing variables
+  position_d_.setZero();
+  orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  position_d_target_.setZero();
+  orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
 
+  std::string urdf_path;
+  if (!node_handle.getParam("pinocchio_urdf_path", urdf_path)) {
+    ROS_ERROR("Pinocchio URDF path not specified!");
+    return false;
+  }
+
+
+  // Build the Panda model
+  pinocchio::urdf::buildModel(urdf_path, pinocchio_model_);
+  pinocchio_data_ = pinocchio::Data(pinocchio_model_);
+  ee_frame_id_ = pinocchio_model_.getFrameId("panda_hand_tcp");
+  
   return true;
 }
 
 void JointImpedanceFrankaController::starting(const ros::Time& /*time*/) {
+
+  franka::RobotState initial_state = state_handle_->getRobotState();
+
+  // convert to eigen
+  Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
+
+  // set desired point to current state
+  position_d_           = initial_transform.translation();
+  orientation_d_        = Eigen::Quaterniond(initial_transform.linear());
+  position_d_target_    = initial_transform.translation();
+  orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
 
   for (size_t i = 0; i < 7; ++i) {
     q_[i] = joint_handles_[i].getPosition();
@@ -215,7 +249,93 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
     orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
   }
 
-  ROS_INFO_STREAM("JointImpedanceFrankaController: Received desired pose for impedance controller.");
+  // Eigen::Quaterniond quat(
+  //   orientation_d_target_.w(),
+  //   orientation_d_target_.x(),
+  //   orientation_d_target_.y(),
+  //   orientation_d_target_.z());
+  // quat.normalize();
+
+  pinocchio::SE3 oMdes(
+      orientation_d_target_.toRotationMatrix(),
+      position_d_target_
+  );
+
+  // Use current joint positions as initial guess
+  Eigen::VectorXd q(pinocchio_model_.nq);
+  for (size_t i = 0; i < 7; i++) {
+    q[i] = q_[i];
+  }
+
+  // IK parameters
+  const double eps = 1e-4;
+  const int IT_MAX = 1000;
+  const double DT = 1e-1;
+  const double damp = 1e-6;
+
+  pinocchio::Data::Matrix6x J(6, pinocchio_model_.nv);
+  J.setZero();
+
+  typedef Eigen::Matrix<double, 6, 1> Vector6d;
+  Vector6d err;
+  Eigen::VectorXd v(pinocchio_model_.nv);
+
+  bool success = false;
+  for (int i = 0;; i++) {
+    pinocchio::forwardKinematics(pinocchio_model_, pinocchio_data_, q);
+    pinocchio::updateFramePlacements(pinocchio_model_, pinocchio_data_);
+
+    const pinocchio::SE3 &current_pose = pinocchio_data_.oMf[ee_frame_id_];
+    // err = pinocchio::log6(oMdes.actInv(current_pose)).toVector();
+    const pinocchio::SE3 iMd = current_pose.actInv(oMdes);
+    err = pinocchio::log6(iMd).toVector();
+    // const pinocchio::SE3 iMd = pinocchio_data_.oMi[ee_frame_id_].actInv(oMdes);
+    // ROS_INFO_STREAM("Current pose" << iMd);
+    // err = pinocchio::log6(iMd).toVector();
+    // ROS_INFO_STREAM("Error vector: " << err);
+
+    if (err.norm() < eps)
+    {
+      success = true;
+      break;
+    }
+    if (i >= IT_MAX)
+    {
+      success = false;
+      break;
+    }
+
+    pinocchio::computeFrameJacobian(pinocchio_model_, pinocchio_data_, q, ee_frame_id_, pinocchio::LOCAL, J);
+
+
+    pinocchio::Data::Matrix6 Jlog;
+    pinocchio::Jlog6(iMd.inverse(), Jlog);
+    J = -Jlog * J;
+    pinocchio::Data::Matrix6 JJt;
+    JJt.noalias() = J * J.transpose();
+    JJt.diagonal().array() += damp;
+    v.noalias() = - J.transpose() * JJt.ldlt().solve(err);
+    q = pinocchio::integrate(pinocchio_model_, q, v * DT);
+  }
+
+  if (!success) {
+    ROS_WARN("Pinocchio IK did not converge to the desired pose.");
+    return;
+  }
+
+  // Update the impedance controller's target joint configuration
+  for (size_t i = 0; i < 7; i++) {
+    target_q_d_[i] = q[i];
+  }
+}  // namespace franka_interactive_controllers
+
+}
+
+PLUGINLIB_EXPORT_CLASS(franka_interactive_controllers::JointImpedanceFrankaController,
+                       controller_interface::ControllerBase)
+
+  // ------------ Analytical IK code ----------------                     
+  // ROS_INFO_STREAM("JointImpedanceFrankaController: Received desired pose for impedance controller.");
 
   // // Convert received pose to std::array<double,16>
   // if (msg.data.size() != 16) {
@@ -228,45 +348,38 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
   //   O_T_EE_array[i] = msg.data[i];
   // }
 
-  // 1) Convert PoseStamped to a 4x4 transformation matrix (Eigen)
-  Eigen::Matrix3d R = orientation_d_target_.toRotationMatrix();
-  Eigen::Vector3d p(position_d_target_);
+  // // Convert PoseStamped to a 4x4 transformation matrix (Eigen)
+  // Eigen::Matrix3d R = orientation_d_target_.toRotationMatrix();
+  // Eigen::Vector3d p(position_d_target_);
 
-  Eigen::Matrix4d O_T_EE;
-  O_T_EE.setIdentity();
-  O_T_EE.topLeftCorner<3, 3>() = R;
-  O_T_EE.topRightCorner<3, 1>() = p;
+  // Eigen::Matrix4d O_T_EE;
+  // O_T_EE.setIdentity();
+  // O_T_EE.topLeftCorner<3, 3>() = R;
+  // O_T_EE.topRightCorner<3, 1>() = p;
 
-  // Convert Eigen matrix to column-major std::array<double,16> for IK
-  std::array<double, 16> O_T_EE_array;
-  Eigen::Map<Eigen::Matrix<double, 4, 4>>(O_T_EE_array.data()) = O_T_EE;
+  // // Convert Eigen matrix to column-major std::array<double,16> for IK
+  // std::array<double, 16> O_T_EE_array;
+  // Eigen::Map<Eigen::Matrix<double, 4, 4>>(O_T_EE_array.data()) = O_T_EE;
 
-  // Get the current joint configuration from the robot
-  std::array<double, 7> q_actual_array;
-  for (size_t i = 0; i < 7; i++) {
-    q_actual_array[i] = q_[i];
-  }
+  // // Get the current joint configuration from the robot
+  // std::array<double, 7> q_actual_array;
+  // for (size_t i = 0; i < 7; i++) {
+  //   q_actual_array[i] = q_[i];
+  // }
 
-  // Preserve the current q7 for redundancy resolution
-  double q7 = q_actual_array[6];
+  // // Preserve the current q7 for redundancy resolution
+  // double q7 = q_actual_array[6];
 
-  // Run the IK solver (case-consistent for smooth motion)
-  std::array<double, 7> q_solution = franka_IK_EE_CC(O_T_EE_array, q7, q_actual_array);
+  // // Run the IK solver (case-consistent for smooth motion)
+  // std::array<double, 7> q_solution = franka_IK_EE_CC(O_T_EE_array, q7, q_actual_array);
 
-  // Check if IK returned a valid solution
-  if (std::isnan(q_solution[0])) {
-    ROS_WARN("IK failed to find a valid solution for the desired pose.");
-    return;
-  }
+  // // Check if IK returned a valid solution
+  // if (std::isnan(q_solution[0])) {
+  //   ROS_WARN("IK failed to find a valid solution for the desired pose.");
+  //   return;
+  // }
 
-  // Update the target joint angles for the impedance controller
-  for (size_t i = 0; i < 7; i++) {
-    target_q_d_[i] = q_solution[i];
-  }
-}
-
-
-}  // namespace franka_interactive_controllers
-
-PLUGINLIB_EXPORT_CLASS(franka_interactive_controllers::JointImpedanceFrankaController,
-                       controller_interface::ControllerBase)
+  // // Update the target joint angles for the impedance controller
+  // for (size_t i = 0; i < 7; i++) {
+  //   target_q_d_[i] = q_solution[i];
+  // }

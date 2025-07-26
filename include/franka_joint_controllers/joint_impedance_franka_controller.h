@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
 #pragma once
 
+#include <pinocchio/fwd.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -22,6 +23,12 @@
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 #include <franka_hw/trigger_rate.h>
+
+#include <pinocchio/parsers/urdf.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/algorithm/joint-configuration.hpp>
+#include <pinocchio/spatial/explog.hpp>
 
 namespace franka_interactive_controllers {
 
@@ -107,6 +114,11 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   double calcSplinePolynomial(const std::array<double,4> &coeffs, const double &x);
   void catmullRomSplineVelCmd(const double &norm_pos, const int &joint_num, const double &interval);
   bool isGoalReached();
+
+  // Pinocchio
+  pinocchio::Model pinocchio_model_;
+  pinocchio::Data pinocchio_data_;
+  pinocchio::FrameIndex ee_frame_id_;
 
 };
 

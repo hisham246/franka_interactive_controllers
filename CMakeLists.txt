@@ -32,6 +32,7 @@ link_directories(/usr/local/lib)
 
 find_package(Eigen3 REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
+find_package(pinocchio REQUIRED)
 
 generate_messages()
 
@@ -120,6 +121,7 @@ target_link_libraries(franka_interactive_controllers PUBLIC
   ${Franka_LIBRARIES}
   ${catkin_LIBRARIES}
   qpOASES
+  pinocchio::pinocchio
 )
 
 target_include_directories(franka_interactive_controllers SYSTEM PUBLIC
@@ -183,6 +185,7 @@ catkin_install_python(
   scripts/spacemouse_teleop_joint_impedance.py
   scripts/exec_policy.py
   scripts/move_gripper.py
+  scripts/joint_impedance_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

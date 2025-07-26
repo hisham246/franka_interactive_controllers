@@ -102,6 +102,7 @@ joint_impedance_franka_controller:
     vel_max: 0.15
     publish_rate: 10.0
     coriolis_factor: 1.0
+    pinocchio_urdf_path: "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/urdf/panda/panda.urdf"
 
 cartesian_pose_franka_controller:
     type: franka_interactive_controllers/CartesianPoseFrankaController
