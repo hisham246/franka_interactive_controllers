@@ -189,8 +189,8 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
 
   // Get current position and velocity of joints
   for (size_t i=0; i<7; i++){
-    q_[i] = joint_handles_[i].getPosition();
-    dq_[i] = joint_handles_[i].getVelocity();
+    q_[i] = robot_state.q[i];
+    dq_[i] = robot_state.dq[i];
   }
   
   // Get desired velocity based on desired joint poses and current joint torques for saturation
@@ -218,9 +218,9 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
 
 
-  // for (size_t i=0; i<7; i++){
-  //   q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1-q_filt_);
-  // }
+  for (size_t i=0; i<7; i++){
+    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1-q_filt_);
+  }
     
   for (size_t i = 0; i < 7; i++) {
     joint_handles_[i].setCommand(tau_d_saturated[i]);
@@ -330,7 +330,7 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
 
   // Update the impedance controller's target joint configuration
   for (size_t i = 0; i < 7; i++) {
-    q_d_[i] = q[i];
+    target_q_d_[i] = q[i];
   }
 }  // namespace franka_interactive_controllers
 
