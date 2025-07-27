@@ -32,6 +32,8 @@ bool JointImpedanceFrankaController::init(hardware_interface::RobotHW* robot_hw,
     "/joint_impedance_controller/desired_pose", 20, &JointImpedanceFrankaController::desiredPoseCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
+  desired_joints_pub_ = node_handle.advertise<sensor_msgs::JointState>("/joint_impedance_controller/desired_joint_positions", 10);
+
 
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
@@ -207,7 +209,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
                           k_gains_[i] * (q_d_[i] - q_[i]) +
-                          d_gains_[i] * (robot_state.dq_d[i] - dq_filtered_[i]);
+                          d_gains_[i] * (dq_d_[i] - dq_filtered_[i]);
                         }
   
 
@@ -219,7 +221,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
 
 
   for (size_t i=0; i<7; i++){
-    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1-q_filt_);
+    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
   }
     
   for (size_t i = 0; i < 7; i++) {
@@ -327,6 +329,19 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
     ROS_WARN("Pinocchio IK did not converge to the desired pose.");
     return;
   }
+
+  // Publish desired joint positions
+  sensor_msgs::JointState joint_state_msg;
+  joint_state_msg.header.stamp = ros::Time::now();
+  joint_state_msg.name = {"panda_joint1", "panda_joint2", "panda_joint3", 
+                          "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"};
+  joint_state_msg.position.resize(7);
+
+  for (size_t i = 0; i < 7; i++) {
+    joint_state_msg.position[i] = q[i];
+  }
+
+  desired_joints_pub_.publish(joint_state_msg);
 
   // Update the impedance controller's target joint configuration
   for (size_t i = 0; i < 7; i++) {

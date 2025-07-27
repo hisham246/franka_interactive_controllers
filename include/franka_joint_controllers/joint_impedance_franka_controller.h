@@ -18,6 +18,7 @@
 #include <std_msgs/Float64MultiArray.h>
 #include <franka_utils/panda_trac_ik.h>
 #include <Eigen/Dense>
+  #include <sensor_msgs/JointState.h>
 
 #include <franka_hw/franka_cartesian_command_interface.h>
 #include <franka_hw/franka_model_interface.h>
@@ -119,6 +120,9 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   pinocchio::Model pinocchio_model_;
   pinocchio::Data pinocchio_data_;
   pinocchio::FrameIndex ee_frame_id_;
+
+
+  ros::Publisher desired_joints_pub_;
 
 };
 
