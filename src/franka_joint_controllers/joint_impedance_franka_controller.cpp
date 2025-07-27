@@ -198,11 +198,16 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     dq_d_[i] = 0.0;
   }
   
+  double alpha = 0.99;
+  for (size_t i = 0; i < 7; i++) {
+    dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * dq_[i];
+  }
+
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
                           k_gains_[i] * (q_d_[i] - q_[i]) +
-                          d_gains_[i] * (dq_d_[i] - dq_[i]);
+                          d_gains_[i] * (dq_d_[i] - dq_filtered_[i]);
 
   }
 
@@ -325,7 +330,7 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
 
   // Update the impedance controller's target joint configuration
   for (size_t i = 0; i < 7; i++) {
-    target_q_d_[i] = q[i];
+    q_d_[i] = q[i];
   }
 }  // namespace franka_interactive_controllers
 
