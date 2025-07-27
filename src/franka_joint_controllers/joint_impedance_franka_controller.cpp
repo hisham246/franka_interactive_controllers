@@ -215,7 +215,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   // 1000 * (1 / sampling_time).
   // std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, current_tau);
   // std::array<double, 7> tau_d_saturated = tau_d_calculated;
-  // std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
+  std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
 
 
   // for (size_t i=0; i<7; i++){
@@ -223,7 +223,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   // }
     
   for (size_t i = 0; i < 7; i++) {
-    joint_handles_[i].setCommand(tau_d_calculated[i]);
+    joint_handles_[i].setCommand(tau_d_saturated[i]);
   }
 
 }
