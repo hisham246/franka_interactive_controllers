@@ -207,9 +207,9 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
                           k_gains_[i] * (q_d_[i] - q_[i]) +
-                          d_gains_[i] * (dq_d_[i] - dq_filtered_[i]);
-
-  }
+                          d_gains_[i] * (robot_state.dq_d[i] - dq_filtered_[i]);
+                        }
+  
 
   // Maximum torque difference with a sampling rate of 1 kHz. The maximum torque rate is
   // 1000 * (1 / sampling_time).
@@ -276,7 +276,7 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
   const double eps = 1e-4;
   const int IT_MAX = 1000;
   const double DT = 1e-1;
-  const double damp = 1e-12;
+  const double damp = 1e-6;
 
   pinocchio::Data::Matrix6x J(6, pinocchio_model_.nv);
   J.setZero();
