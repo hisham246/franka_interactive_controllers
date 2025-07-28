@@ -82,20 +82,20 @@ joint_impedance_franka_controller:
         - panda_joint6
         - panda_joint7
     k_gains:
-        - 600.0
-        - 600.0
-        - 600.0
-        - 600.0
-        - 250.0
+        - 400.0
+        - 400.0
+        - 400.0
+        - 400.0
         - 150.0
         - 50.0
+        - 50.0
     d_gains:
-        - 50.0
-        - 50.0
-        - 50.0
         - 20.0
         - 20.0
         - 20.0
+        - 10.0
+        - 10.0
+        - 10.0
         - 10.0
     radius: 0.1
     acceleration_time: 2.0

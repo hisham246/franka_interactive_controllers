@@ -280,7 +280,7 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
 
   // IK parameters
   const double eps = 1e-4;
-  const int IT_MAX = 1000;
+  const int IT_MAX = 500;
   const double DT = 1e-1;
   const double damp = 1e-6;
 
