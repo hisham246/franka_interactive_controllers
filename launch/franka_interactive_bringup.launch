@@ -39,6 +39,11 @@
     <include file="$(find franka_interactive_controllers)/launch/joint_impedance_franka_controller.launch" 
       if="$(eval arg('controller') == 'joint_impedance')">
     </include>
+
+    <!-- Start only if joint_impedance_controller is set in "controller"-->
+    <include file="$(find franka_interactive_controllers)/launch/hybrid_joint_impedance_controller.launch" 
+      if="$(eval arg('controller') == 'hybrid_joint_impedance')">
+    </include>
   </group>
 
 
