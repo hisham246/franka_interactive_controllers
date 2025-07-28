@@ -205,14 +205,14 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * dq_[i];
   }
 
-  // for (size_t i = 0; i < 7; i++) {
-  //   q_filtered_[i] = (1 - alpha) * q_filtered_[i] + alpha * q_d_[i];
-  // }
+  for (size_t i = 0; i < 7; i++) {
+    q_filtered_[i] = (1 - q_filt_) * q_filtered_[i] + q_filt_ * q_d_[i];
+  }
 
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
-                          k_gains_[i] * (q_d_[i] - q_[i]) +
+                          k_gains_[i] * (q_filtered_[i] - q_[i]) +
                           d_gains_[i] * (dq_d_[i] - dq_filtered_[i]);
                         }
   
@@ -224,9 +224,9 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
 
 
-  for (size_t i=0; i<7; i++){
-    q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
-  }
+  // for (size_t i=0; i<7; i++){
+  //   q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
+  // }
     
   for (size_t i = 0; i < 7; i++) {
     joint_handles_[i].setCommand(tau_d_saturated[i]);
@@ -349,7 +349,7 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
 
   // Update the impedance controller's target joint configuration
   for (size_t i = 0; i < 7; i++) {
-    target_q_d_[i] = q[i];
+    q_d_[i] = q[i];
   }
 }  // namespace franka_interactive_controllers
 
