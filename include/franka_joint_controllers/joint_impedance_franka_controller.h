@@ -59,7 +59,7 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   double vel_max_{0.05};
   double angle_{0.0};
   double vel_current_{0.0};
-  double alpha_q_{0.05};
+  double alpha_q_{0.2};
   std::array<double, 7> q_d_;
   std::array<double, 7> q_;
   std::array<double, 7> target_q_d_;
