@@ -205,6 +205,10 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * dq_[i];
   }
 
+  // for (size_t i = 0; i < 7; i++) {
+  //   q_filtered_[i] = (1 - alpha) * q_filtered_[i] + alpha * q_d_[i];
+  // }
+
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +

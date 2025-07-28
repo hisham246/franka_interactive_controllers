@@ -65,7 +65,7 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   std::array<double, 7> target_q_d_;
   std::array<double, 7> dq_d_;
   std::array<double, 7> dq_;
-  double q_filt_ {0.5};  // amount off target to add to desired
+  double q_filt_ {0.3};  // amount off target to add to desired
   double epsilon_ = 0.0001;
   double max_abs_vel_ = 2.1;
 
@@ -90,6 +90,7 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   std::vector<double> k_gains_;
   std::vector<double> d_gains_;
   double coriolis_factor_{1.0};
+  std::array<double, 7> q_filtered_;
   std::array<double, 7> dq_filtered_;
   // std::array<double, 16> initial_pose_;
   // std::array<double, 16> target_pose_;
