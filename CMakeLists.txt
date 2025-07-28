@@ -6,9 +6,6 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(catkin REQUIRED COMPONENTS
-  kdl_parser
-  trac_ik_lib
-  trac_ik_kinematics_plugin
   controller_interface
 #   passive_ds_control
   control_toolbox
@@ -77,13 +74,14 @@ set(H_FILES ${INCLUDE_DIR}/franka_cartesian_controllers/cartesian_pose_impedance
             ${INCLUDE_DIR}/franka_cartesian_controllers/cartesian_force_controller.h
             ${INCLUDE_DIR}/franka_joint_controllers/joint_gravity_compensation_controller.h
             ${INCLUDE_DIR}/franka_joint_controllers/joint_impedance_franka_controller.h
+            ${INCLUDE_DIR}/franka_joint_controllers/hybrid_joint_impedance_controller.h
             ${INCLUDE_DIR}/franka_joint_controllers/joint_position_franka_controller.h
             ${INCLUDE_DIR}/franka_joint_controllers/joint_velocity_franka_controller.h            
             ${INCLUDE_DIR}/franka_motion_generators/libfranka_joint_motion_generator.h
             ${INCLUDE_DIR}/franka_utils/pseudo_inversion.h
             ${INCLUDE_DIR}/franka_utils/kinematics_utils.hpp
             ${INCLUDE_DIR}/franka_utils/franka_ik_He.hpp
-            ${INCLUDE_DIR}/franka_utils/panda_trac_ik.h)
+            )
 
 
 ## Specify locations of header files
@@ -104,8 +102,9 @@ set(SRCS
   src/franka_joint_controllers/joint_position_franka_controller.cpp
   src/franka_joint_controllers/joint_velocity_franka_controller.cpp
   src/franka_joint_controllers/joint_impedance_franka_controller.cpp
+  src/franka_joint_controllers/hybrid_joint_impedance_controller.cpp
   src/franka_motion_generators/libfranka_joint_motion_generator.cpp
-  src/panda_trac_ik.cpp)
+  )
 
 add_library(franka_interactive_controllers ${H_FILES} ${SRCS})
 
@@ -183,7 +182,6 @@ catkin_install_python(
   scripts/franka_gui_gripper_run.py
   scripts/spacemouse_teleop.py
   scripts/spacemouse_teleop_joint_impedance.py
-  scripts/exec_policy.py
   scripts/move_gripper.py
   scripts/joint_impedance_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

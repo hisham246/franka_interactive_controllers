@@ -22,6 +22,8 @@
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 #include <franka_hw/trigger_rate.h>
+#include <dynamic_reconfigure/server.h>
+#include <franka_interactive_controllers/compliance_full_paramConfig.h>
 
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
@@ -31,7 +33,7 @@
 
 namespace franka_interactive_controllers {
 
-class JointImpedanceFrankaController : public controller_interface::MultiInterfaceController<
+class HybridJointImpedanceController : public controller_interface::MultiInterfaceController<
                                             franka_hw::FrankaModelInterface,
                                             hardware_interface::EffortJointInterface,
                                             franka_hw::FrankaStateInterface> {
@@ -51,6 +53,7 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
   std::vector<hardware_interface::JointHandle> joint_handles_;
 
+  double filter_params_{0.005};
   static constexpr double kDeltaTauMax{1.0};
   double radius_{0.1};
   double acceleration_time_{2.0};
@@ -79,11 +82,17 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   Eigen::Vector3d position_d_target_;
   Eigen::Quaterniond orientation_d_target_;
   std::mutex position_and_orientation_d_target_mutex_;
+  Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
+  Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;
+  Eigen::Matrix<double, 6, 6> cartesian_damping_;
+  Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
 
-  // 7 by 4 matrix for coefficients for each franka panda joint
-  std::array<std::array<double, 4>, 7> vel_catmull_coeffs_first_spline_;
-  std::array<std::array<double, 4>, 7> vel_catmull_coeffs_second_spline_;
-  std::array<double, 7> calc_max_pos_diffs;
+  // Dynamic reconfigure
+  std::unique_ptr<dynamic_reconfigure::Server<franka_interactive_controllers::compliance_full_paramConfig>>
+      dynamic_server_compliance_param_;
+  ros::NodeHandle dynamic_reconfigure_compliance_param_node_;
+  void complianceParamCallback(franka_interactive_controllers::compliance_full_paramConfig& config,
+                               uint32_t level);
 
   std::vector<double> k_gains_;
   std::vector<double> d_gains_;
@@ -101,19 +110,11 @@ class JointImpedanceFrankaController : public controller_interface::MultiInterfa
   ros::Subscriber sub_desired_pose_;
   ros::Subscriber sub_joint_positions_;
   void desiredPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
-  void jointPositionsCallback(const std_msgs::Float64MultiArray& msg);
-  std::array<double, 7> runJointPositionController();
-
-  std::array<double, 4> catmullRomSpline(const double &tau, const std::array<double,4> &points);
-  double calcSplinePolynomial(const std::array<double,4> &coeffs, const double &x);
-  void catmullRomSplineVelCmd(const double &norm_pos, const int &joint_num, const double &interval);
-  bool isGoalReached();
 
   // Pinocchio
   pinocchio::Model pinocchio_model_;
   pinocchio::Data pinocchio_data_;
   pinocchio::FrameIndex ee_frame_id_;
-
 
   ros::Publisher desired_joints_pub_;
 

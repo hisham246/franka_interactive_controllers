@@ -35,6 +35,11 @@
      CHANGE: A controller that tracks a cartesian path with a joint impedance controller that compensates coriolis torques. The torque commands are compared to measured torques in Console outputs.
     </description>
   </class>
+  <class name="franka_interactive_controllers/HybridJointImpedanceController" type="franka_interactive_controllers::HybridJointImpedanceController" base_class_type="controller_interface::ControllerBase">
+    <description>
+     CHANGE: A controller that tracks a cartesian pose with a hybrid joint impedance controller that compensates coriolis torques. The torque commands are compared to measured torques in Console outputs.
+    </description>
+  </class>
   <class name="franka_interactive_controllers/CartesianPoseFrankaController" type="franka_interactive_controllers::CartesianPoseFrankaController" base_class_type="controller_interface::ControllerBase">
     <description>
       CHANGE: A controller that executes a short motion based on cartesian poses to demonstrate correct usage

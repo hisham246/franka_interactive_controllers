@@ -81,22 +81,39 @@ joint_impedance_franka_controller:
         - panda_joint5
         - panda_joint6
         - panda_joint7
+    # k_gains:
+    #     - 600.0
+    #     - 600.0
+    #     - 600.0
+    #     - 600.0
+    #     - 250.0
+    #     - 150.0
+    #     - 50.0
+    # d_gains:
+    #     - 50.0
+    #     - 50.0
+    #     - 50.0
+    #     - 20.0
+    #     - 20.0
+    #     - 20.0
+    #     - 10.0
+    # ------- Default values from Polymetis --------
     k_gains:
-        - 600.0
-        - 600.0
-        - 600.0
-        - 600.0
-        - 250.0
-        - 150.0
-        - 50.0
-    d_gains:
-        - 50.0
-        - 50.0
-        - 50.0
         - 20.0
-        - 20.0
-        - 20.0
+        - 30.0
+        - 25.0
+        - 25.0
+        - 15.0
         - 10.0
+        - 10.0
+    d_gains:
+        - 1.0
+        - 1.5
+        - 1.0
+        - 0.5
+        - 0.5
+        - 0.5
+        - 0.5
     radius: 0.1
     acceleration_time: 2.0
     vel_max: 0.15
@@ -104,6 +121,40 @@ joint_impedance_franka_controller:
     coriolis_factor: 1.0
     # pinocchio_urdf_path: "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/urdf/panda/panda.urdf"
 
+hybrid_joint_impedance_controller:
+    type: franka_interactive_controllers/HybridJointImpedanceController
+    arm_id: panda
+    joint_names:
+        - panda_joint1
+        - panda_joint2
+        - panda_joint3
+        - panda_joint4
+        - panda_joint5
+        - panda_joint6
+        - panda_joint7
+    # ------- Default values from Polymetis --------
+    k_gains:
+        - 20.0
+        - 30.0
+        - 25.0
+        - 25.0
+        - 15.0
+        - 10.0
+        - 10.0
+    d_gains:
+        - 1.0
+        - 1.5
+        - 1.0
+        - 0.5
+        - 0.5
+        - 0.5
+        - 0.5
+    radius: 0.1
+    acceleration_time: 2.0
+    vel_max: 0.15
+    publish_rate: 10.0
+    coriolis_factor: 1.0
+    
 cartesian_pose_franka_controller:
     type: franka_interactive_controllers/CartesianPoseFrankaController
     arm_id: panda

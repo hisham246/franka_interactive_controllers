@@ -26,11 +26,11 @@ def franka_state_callback(msg):
     current_position = position
     current_quaternion = quat
 
-def publish_circular_trajectory(radius=0.5, duration=10.0, freq=100):
+def publish_circular_trajectory(radius=5.5, duration=10.0, freq=100):
     """Publishes a circular trajectory in the XY plane, keeping Z and orientation fixed."""
     rospy.loginfo("Starting circular trajectory...")
 
-    pub = rospy.Publisher("/joint_impedance_controller/desired_pose", PoseStamped, queue_size=1)
+    pub = rospy.Publisher("/hybrid_joint_impedance_controller/desired_pose", PoseStamped, queue_size=1)
     rate = rospy.Rate(freq)
 
     center_x, center_y, center_z = current_position
@@ -70,7 +70,7 @@ def publish_forward_trajectory(distance=0.05, duration=5.0, freq=100, axis='x'):
     """
     rospy.loginfo(f"Starting forward trajectory along {axis}-axis...")
 
-    pub = rospy.Publisher("/joint_impedance_controller/desired_pose", PoseStamped, queue_size=1)
+    pub = rospy.Publisher("/hybrid_joint_impedance_controller/desired_pose", PoseStamped, queue_size=1)
     rate = rospy.Rate(freq)
 
     start_pos = current_position.copy()
@@ -119,8 +119,8 @@ def main():
         rospy.sleep(0.1)
 
     rospy.loginfo(f"Current EE Pose:\n Position: {current_position}\n Quaternion: {current_quaternion}")
-    # publish_circular_trajectory(radius=0.05, duration=10.0, freq=100)
-    publish_forward_trajectory(distance=0.05, duration=5.0, freq=100, axis='x')
+    publish_circular_trajectory(radius=0.05, duration=10.0, freq=100)
+    # publish_forward_trajectory(distance=0.05, duration=5.0, freq=100, axis='x')
 
 if __name__ == "__main__":
     try:
