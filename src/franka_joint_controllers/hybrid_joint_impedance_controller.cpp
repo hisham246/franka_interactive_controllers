@@ -142,7 +142,6 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
     return false;
   }
 
-
   // Build the Panda model
   pinocchio::urdf::buildModel(urdf_path, pinocchio_model_);
   pinocchio_data_ = pinocchio::Data(pinocchio_model_);

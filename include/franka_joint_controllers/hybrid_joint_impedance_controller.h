@@ -55,11 +55,6 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
 
   double filter_params_{0.005};
   static constexpr double kDeltaTauMax{1.0};
-  double radius_{0.1};
-  double acceleration_time_{2.0};
-  double vel_max_{0.05};
-  double angle_{0.0};
-  double vel_current_{0.0};
   double alpha_q_{0.2};
   std::array<double, 7> q_d_;
   std::array<double, 7> q_;
@@ -67,15 +62,6 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
   std::array<double, 7> dq_d_;
   std::array<double, 7> dq_;
   double q_filt_ {0.5};  // amount off target to add to desired
-  double epsilon_ = 0.0001;
-  double max_abs_vel_ = 2.1;
-
-  ros::Time start_time_;
-
-  std::array<double, 7> limited_joint_cmds_;
-  std::array<double, 7> last_commanded_pos_;
-  std::array<double, 7> iters_;
-  std::array<double, 7> joint_cmds_;
 
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
@@ -99,8 +85,6 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
   double coriolis_factor_{1.0};
   std::array<double, 7> q_filtered_;
   std::array<double, 7> dq_filtered_;
-  // std::array<double, 16> initial_pose_;
-  // std::array<double, 16> target_pose_;
   geometry_msgs::Pose target_pose_;
 
   franka_hw::TriggerRate rate_trigger_{1.0};
