@@ -18,7 +18,7 @@
   
   <!-- Loads controller parameters -->
   <rosparam command="load" file="$(find franka_interactive_controllers)/config/franka_interactive_controllers.yaml" />
-  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen"  args="hyrbid_joint_impedance_controller"/>
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen"  args="hybrid_joint_impedance_controller"/>
   <param name="hybrid_joint_impedance_controller/pinocchio_urdf_path" value="$(find franka_interactive_controllers)/urdf/panda/panda.urdf"/>
 
   <!-- IF interactive marker= true: Use interactive marker to define desired pose for impedance (stiffness + damping compensation) controller -->
