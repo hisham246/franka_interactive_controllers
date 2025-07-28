@@ -200,7 +200,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     dq_d_[i] = 0.0;
   }
   
-  double alpha = 0.7;
+  double alpha = 0.99;
   for (size_t i = 0; i < 7; i++) {
     dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * dq_[i];
   }
@@ -226,7 +226,7 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
                           k_gains_[i] * (q_filtered_[i] - q_[i]) +
-                          d_gains_[i] * (dq_d_[i] - dq_filtered_[i]);
+                          d_gains_[i] * (robot_state.dq_d[i] - dq_filtered_[i]);
                         }
   
 
