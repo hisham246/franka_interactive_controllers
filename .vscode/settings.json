@@ -8,7 +8,12 @@
         "span": "cpp",
         "dense": "cpp",
         "memory": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "*.txx": "cpp",
+        "rope": "cpp",
+        "future": "cpp",
+        "istream": "cpp",
+        "ostream": "cpp"
     },
     "ros.distro": "noetic",
     "python.autoComplete.extraPaths": [

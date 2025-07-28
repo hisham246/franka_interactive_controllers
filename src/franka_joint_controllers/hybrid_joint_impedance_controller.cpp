@@ -39,20 +39,6 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
     ROS_ERROR("HybridJointImpedanceController: Could not read parameter arm_id");
     return false;
   }
-  if (!node_handle.getParam("radius", radius_)) {
-    ROS_INFO_STREAM(
-        "HybridJointImpedanceController: No parameter radius, defaulting to: " << radius_);
-  }
-
-  if (!node_handle.getParam("vel_max", vel_max_)) {
-    ROS_INFO_STREAM(
-        "HybridJointImpedanceController: No parameter vel_max, defaulting to: " << vel_max_);
-  }
-  if (!node_handle.getParam("acceleration_time", acceleration_time_)) {
-    ROS_INFO_STREAM(
-        "HybridJointImpedanceController: No parameter acceleration_time, defaulting to: "
-        << acceleration_time_);
-  }
 
   std::vector<std::string> joint_names;
   if (!node_handle.getParam("joint_names", joint_names) || joint_names.size() != 7) {
@@ -75,13 +61,6 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
         "controller init!");
     return false;
   }
-
-  double publish_rate(30.0);
-  if (!node_handle.getParam("publish_rate", publish_rate)) {
-    ROS_INFO_STREAM("HybridJointImpedanceController: publish_rate not found. Defaulting to "
-                    << publish_rate);
-  }
-  rate_trigger_ = franka_hw::TriggerRate(publish_rate);
 
   if (!node_handle.getParam("coriolis_factor", coriolis_factor_)) {
     ROS_INFO_STREAM("HybridJointImpedanceController: coriolis_factor not found. Defaulting to "
@@ -277,10 +256,13 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
     joint_handles_[i].setCommand(tau_d_saturated[i]);
   }
 
-  cartesian_stiffness_ =
-      filter_params_ * cartesian_stiffness_target_ + (1.0 - filter_params_) * cartesian_stiffness_;
-  cartesian_damping_ =
-      filter_params_ * cartesian_damping_target_ + (1.0 - filter_params_) * cartesian_damping_;
+  // cartesian_stiffness_ =
+  //     filter_params_ * cartesian_stiffness_target_ + (1.0 - filter_params_) * cartesian_stiffness_;
+  // cartesian_damping_ =
+  //     filter_params_ * cartesian_damping_target_ + (1.0 - filter_params_) * cartesian_damping_;
+
+  cartesian_stiffness_  = cartesian_stiffness_target_;
+  cartesian_damping_    = cartesian_damping_target_;
 
   std::lock_guard<std::mutex> position_d_target_mutex_lock(
     position_and_orientation_d_target_mutex_);
@@ -367,7 +349,6 @@ void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::Po
     }
 
     pinocchio::computeFrameJacobian(pinocchio_model_, pinocchio_data_, q, ee_frame_id_, pinocchio::LOCAL, J);
-
 
     pinocchio::Data::Matrix6 Jlog;
     pinocchio::Jlog6(iMd.inverse(), Jlog);

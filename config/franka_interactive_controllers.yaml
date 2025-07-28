@@ -149,10 +149,6 @@ hybrid_joint_impedance_controller:
         - 0.5
         - 0.5
         - 0.5
-    radius: 0.1
-    acceleration_time: 2.0
-    vel_max: 0.15
-    publish_rate: 10.0
     coriolis_factor: 1.0
     
 cartesian_pose_franka_controller:
