@@ -209,6 +209,19 @@ void JointImpedanceFrankaController::update(const ros::Time& /*time*/,
     q_filtered_[i] = (1 - q_filt_) * q_filtered_[i] + q_filt_ * q_d_[i];
   }
 
+  // Publish desired joint positions
+  sensor_msgs::JointState joint_state_msg;
+  joint_state_msg.header.stamp = ros::Time::now();
+  joint_state_msg.name = {"panda_joint1", "panda_joint2", "panda_joint3", 
+                          "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"};
+  joint_state_msg.position.resize(7);
+
+  for (size_t i = 0; i < 7; i++) {
+    joint_state_msg.position[i] = q_filtered_[i];
+  }
+
+  desired_joints_pub_.publish(joint_state_msg);
+
   std::array<double, 7> tau_d_calculated;
   for (size_t i = 0; i < 7; i++) {
     tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
@@ -334,18 +347,18 @@ void JointImpedanceFrankaController::desiredPoseCallback(const geometry_msgs::Po
     return;
   }
 
-  // Publish desired joint positions
-  sensor_msgs::JointState joint_state_msg;
-  joint_state_msg.header.stamp = ros::Time::now();
-  joint_state_msg.name = {"panda_joint1", "panda_joint2", "panda_joint3", 
-                          "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"};
-  joint_state_msg.position.resize(7);
+  // // Publish desired joint positions
+  // sensor_msgs::JointState joint_state_msg;
+  // joint_state_msg.header.stamp = ros::Time::now();
+  // joint_state_msg.name = {"panda_joint1", "panda_joint2", "panda_joint3", 
+  //                         "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"};
+  // joint_state_msg.position.resize(7);
 
-  for (size_t i = 0; i < 7; i++) {
-    joint_state_msg.position[i] = q[i];
-  }
+  // for (size_t i = 0; i < 7; i++) {
+  //   joint_state_msg.position[i] = q[i];
+  // }
 
-  desired_joints_pub_.publish(joint_state_msg);
+  // desired_joints_pub_.publish(joint_state_msg);
 
   // Update the impedance controller's target joint configuration
   for (size_t i = 0; i < 7; i++) {
