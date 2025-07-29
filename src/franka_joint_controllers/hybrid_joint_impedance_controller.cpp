@@ -121,7 +121,7 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
       ros::NodeHandle(node_handle.getNamespace() + "/dynamic_reconfigure_compliance_param_node");
 
   dynamic_server_compliance_param_ = std::make_unique<
-      dynamic_reconfigure::Server<franka_interactive_controllers::compliance_full_paramConfig>>(
+      dynamic_reconfigure::Server<franka_interactive_controllers::compliance_param_hybridConfig>>(
       dynamic_reconfigure_compliance_param_node_);
 
   dynamic_server_compliance_param_->setCallback(
@@ -384,7 +384,7 @@ void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::Po
 }  // namespace franka_interactive_controllers
 
 void HybridJointImpedanceController::complianceParamCallback(
-    franka_interactive_controllers::compliance_full_paramConfig& config,
+    franka_interactive_controllers::compliance_param_hybridConfig& config,
     uint32_t /*level*/) {
   // Set individual translational stiffness for each axis
   cartesian_stiffness_target_.setIdentity();
