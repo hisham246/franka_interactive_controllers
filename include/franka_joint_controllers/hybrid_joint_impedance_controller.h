@@ -23,7 +23,7 @@
 #include <franka_hw/franka_state_interface.h>
 #include <franka_hw/trigger_rate.h>
 #include <dynamic_reconfigure/server.h>
-#include <franka_interactive_controllers/compliance_full_paramConfig.h>
+#include <franka_interactive_controllers/compliance_param_hybridConfig.h>
 
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
@@ -74,10 +74,10 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
 
   // Dynamic reconfigure
-  std::unique_ptr<dynamic_reconfigure::Server<franka_interactive_controllers::compliance_full_paramConfig>>
+  std::unique_ptr<dynamic_reconfigure::Server<franka_interactive_controllers::compliance_param_hybridConfig>>
       dynamic_server_compliance_param_;
   ros::NodeHandle dynamic_reconfigure_compliance_param_node_;
-  void complianceParamCallback(franka_interactive_controllers::compliance_full_paramConfig& config,
+  void complianceParamCallback(franka_interactive_controllers::compliance_param_hybridConfig& config,
                                uint32_t level);
 
   std::vector<double> k_gains_;

@@ -37,6 +37,7 @@ generate_dynamic_reconfigure_options(
   cfg/minimal_compliance_param.cfg
   cfg/compliance_param.cfg
   cfg/compliance_full_param.cfg
+  cfg/compliance_param_hybrid.cfg
   cfg/desired_mass_param.cfg
   cfg/gravity_compensation_param.cfg
   cfg/passive_ds_param.cfg
