@@ -427,10 +427,10 @@ class VicUmiEnv:
         # schedule waypoints
         for i in range(len(new_actions)):
             r_actions = new_actions[i,:6]
-            g_actions = new_actions[i, 9:]
-            # g_actions = new_actions[i, 6:]
+            # g_actions = new_actions[i, 9:]
+            g_actions = new_actions[i, 6:]
 
-            Kx_trans = new_actions[i, 6:9]
+            # Kx_trans = new_actions[i, 6:9]
             # Kx = np.concatenate([Kx_trans, Kx_rot])
             
             # Damping gains
@@ -442,7 +442,7 @@ class VicUmiEnv:
             # print("Scheduling")
             self.robot.schedule_waypoint(
                 pose=r_actions,
-                stiffness=Kx_trans,
+                # stiffness=Kx_trans,
                 target_time=new_timestamps[i]-r_latency
             )
             self.gripper.schedule_waypoint(

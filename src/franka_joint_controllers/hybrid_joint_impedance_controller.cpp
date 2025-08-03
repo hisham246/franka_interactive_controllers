@@ -21,7 +21,6 @@
 #include <pinocchio/algorithm/joint-configuration.hpp>
 #include <pinocchio/spatial/explog.hpp>
 
-
 namespace franka_interactive_controllers {
 
 bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,

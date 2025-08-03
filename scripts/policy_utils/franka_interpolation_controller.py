@@ -24,8 +24,8 @@ class Command(enum.Enum):
 
 class FrankaROSInterface:
     def __init__(self,
-                 pose_topic='/cartesian_pose_impedance_controller/desired_pose',
-                 impedance_config_ns='/cartesian_pose_impedance_controller/dynamic_reconfigure_compliance_param_node',
+                 pose_topic='/hybrid_joint_impedance_controller/desired_pose',
+                 impedance_config_ns='/hybrid_joint_impedance_controller/dynamic_reconfigure_compliance_param_node',
                  ee_state_topic='/franka_state_controller/ee_pose',
                  joint_state_topic='/joint_states'):
         
@@ -115,7 +115,7 @@ class FrankaVariableImpedanceController(mp.Process):
         example = {
             'cmd': Command.SERVOL.value,
             'target_pose': np.zeros((6,), dtype=np.float64),
-            'target_stiffness': np.zeros((3,), dtype=np.float64),
+            # 'target_stiffness': np.zeros((3,), dtype=np.float64),
             'duration': 0.0,
             'target_time': 0.0
         }
@@ -187,7 +187,7 @@ class FrankaVariableImpedanceController(mp.Process):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
-    def servoL(self, pose, stiffness, duration=0.1):
+    def servoL(self, pose, duration=0.1):
         assert self.is_alive()
         assert(duration >= (1/self.frequency))
         pose = np.array(pose)
@@ -195,7 +195,7 @@ class FrankaVariableImpedanceController(mp.Process):
         message = {
             'cmd': Command.SERVOL.value,
             'target_pose': pose,    
-            'target_stiffness': stiffness,
+            # 'target_stiffness': stiffness,
             'duration': duration
         }
 
@@ -203,13 +203,13 @@ class FrankaVariableImpedanceController(mp.Process):
         self.input_queue.put(message)
 
 
-    def schedule_waypoint(self, pose, stiffness, target_time):
+    def schedule_waypoint(self, pose, target_time):
         pose = np.array(pose)
         assert pose.shape == (6,)
         message = {
             'cmd': Command.SCHEDULE_WAYPOINT.value,
             'target_pose': pose,
-            'target_stiffness': stiffness,
+            # 'target_stiffness': stiffness,
             'target_time': target_time
         }
         self.input_queue.put(message)
@@ -231,10 +231,10 @@ class FrankaVariableImpedanceController(mp.Process):
         robot = FrankaROSInterface()
 
         try:
-            stiffness_update_rate = 10  # Hz
-            stiffness_update_dt = 1.0 / stiffness_update_rate
-            last_stiffness_update_time = time.monotonic()
-            target_stiffness = None
+            # stiffness_update_rate = 10  # Hz
+            # stiffness_update_dt = 1.0 / stiffness_update_rate
+            # last_stiffness_update_time = time.monotonic()
+            # target_stiffness = None
 
             dt = 1. / self.frequency
             curr_pose = robot.get_ee_pose()
@@ -260,10 +260,10 @@ class FrankaVariableImpedanceController(mp.Process):
                 # print("[Robot] Interpolated EE pose:", ee_pose)
                 robot.update_desired_ee_pose(ee_pose)
 
-                # Lower frequency stiffness update
-                if target_stiffness is not None and t_now - last_stiffness_update_time >= stiffness_update_dt:
-                    robot.update_stiffness_gains(target_stiffness)
-                    last_stiffness_update_time = t_now
+                # # Lower frequency stiffness update
+                # if target_stiffness is not None and t_now - last_stiffness_update_time >= stiffness_update_dt:
+                #     robot.update_stiffness_gains(target_stiffness)
+                #     last_stiffness_update_time = t_now
 
                 # Read robot state and push to buffer
                 state = dict()
@@ -309,7 +309,7 @@ class FrankaVariableImpedanceController(mp.Process):
                         )
                         last_waypoint_time = t_insert
                     elif cmd == Command.SCHEDULE_WAYPOINT.value:
-                        target_stiffness = command['target_stiffness']
+                        # target_stiffness = command['target_stiffness']
                         target_pose = command['target_pose']
                         target_time = float(command['target_time'])
                         target_time = time.monotonic() - time.time() + target_time
