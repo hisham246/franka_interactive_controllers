@@ -107,9 +107,6 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
   bool violation_triggered_ = false;
   ros::Timer violation_check_timer_;
 
-  // test
-  ros::Time start_time_;
-
 };
 
 }  // namespace franka_interactive_controllers

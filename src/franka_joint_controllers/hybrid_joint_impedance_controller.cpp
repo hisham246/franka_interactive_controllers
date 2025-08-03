@@ -156,8 +156,6 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
 
 void HybridJointImpedanceController::starting(const ros::Time& /*time*/) {
 
-  start_time_ = ros::Time::now();
-
   franka::RobotState initial_state = state_handle_->getRobotState();
   // get jacobian
   std::array<double, 42> jacobian_array =
@@ -183,11 +181,6 @@ void HybridJointImpedanceController::starting(const ros::Time& /*time*/) {
 
 void HybridJointImpedanceController::update(const ros::Time& /*time*/,
                                              const ros::Duration& period) {
-
-  if ((ros::Time::now() - start_time_).toSec() > 10.0 && !violation_triggered_) {
-    ROS_WARN_STREAM("Manual test trigger: 10 seconds passed, flagging violation.");
-    violation_triggered_ = true;
-}
 
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
