@@ -2,7 +2,7 @@
 <launch>
   <arg name="robot_ip"               default="franka2"/>
   <arg name="load_gripper"           default="false" />
-  <arg name="use_interactive_marker" default="false" />
+  <arg name="use_interactive_marker" default="true" />
   <arg name="use_gripper_gui"        default="false" />
   <arg name="load_franka_control"    default="false" />
 
