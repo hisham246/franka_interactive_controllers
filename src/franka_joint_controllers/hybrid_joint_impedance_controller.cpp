@@ -11,6 +11,7 @@
 #include <controller_interface/controller_base.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
+#include <controller_manager_msgs/SwitchController.h>
 #include <Eigen/Dense>
 
 #include <franka/robot_state.h>
@@ -115,6 +116,10 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
     }
   }
 
+
+  violation_check_timer_ = node_handle.createTimer(ros::Duration(0.05),
+    &HybridJointImpedanceController::violationCheckCallback, this);
+
   // Getting Dynamic Reconfigure objects
   dynamic_reconfigure_compliance_param_node_ =
       ros::NodeHandle(node_handle.getNamespace() + "/dynamic_reconfigure_compliance_param_node");
@@ -151,6 +156,8 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
 
 void HybridJointImpedanceController::starting(const ros::Time& /*time*/) {
 
+  start_time_ = ros::Time::now();
+
   franka::RobotState initial_state = state_handle_->getRobotState();
   // get jacobian
   std::array<double, 42> jacobian_array =
@@ -176,6 +183,11 @@ void HybridJointImpedanceController::starting(const ros::Time& /*time*/) {
 
 void HybridJointImpedanceController::update(const ros::Time& /*time*/,
                                              const ros::Duration& period) {
+
+  if ((ros::Time::now() - start_time_).toSec() > 10.0 && !violation_triggered_) {
+    ROS_WARN_STREAM("Manual test trigger: 10 seconds passed, flagging violation.");
+    violation_triggered_ = true;
+}
 
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
@@ -404,6 +416,33 @@ void HybridJointImpedanceController::complianceParamCallback(
   cartesian_damping_target_(3, 3) = 2.0 * sqrt(config.rotational_stiffness_x);
   cartesian_damping_target_(4, 4) = 2.0 * sqrt(config.rotational_stiffness_y);
   cartesian_damping_target_(5, 5) = 2.0 * sqrt(config.rotational_stiffness_z);
+}
+
+void HybridJointImpedanceController::violationCheckCallback(const ros::TimerEvent&) {
+  if (violation_triggered_) {
+    ROS_ERROR_STREAM("Safety violation detected. Requesting controller stop...");
+
+    ros::NodeHandle nh;
+    ros::ServiceClient switch_client = nh.serviceClient<controller_manager_msgs::SwitchController>(
+        "/controller_manager/switch_controller");
+
+    controller_manager_msgs::SwitchController switch_srv;
+    switch_srv.request.stop_controllers.push_back("hybrid_joint_impedance_controller");
+    switch_srv.request.strictness = controller_manager_msgs::SwitchController::Request::STRICT;
+
+    if (switch_client.call(switch_srv)) {
+      if (switch_srv.response.ok) {
+        ROS_WARN("HybridJointImpedanceController stopped successfully.");
+      } else {
+        ROS_ERROR("Controller stop request was sent but failed.");
+      }
+    } else {
+      ROS_ERROR("Failed to call controller_manager/switch_controller service.");
+    }
+
+    // Prevent repeated attempts
+    violation_triggered_ = false;
+  }
 }
 
 }

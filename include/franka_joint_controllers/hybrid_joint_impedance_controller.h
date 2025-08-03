@@ -102,6 +102,14 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
 
   ros::Publisher desired_joints_pub_;
 
+  // Safety constraints
+  void violationCheckCallback(const ros::TimerEvent&);
+  bool violation_triggered_ = false;
+  ros::Timer violation_check_timer_;
+
+  // test
+  ros::Time start_time_;
+
 };
 
 }  // namespace franka_interactive_controllers
