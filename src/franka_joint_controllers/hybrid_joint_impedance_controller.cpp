@@ -272,6 +272,11 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
   orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
 
+  Eigen::AngleAxisd aa(orientation_d_);
+  Eigen::Vector3d rotvec = aa.angle() * aa.axis();
+  double gripper_width = 0.08;  // 8 cm typical Panda gripper max
+  double table_height_threshold = 0.025; // 2.5 cm above table (adjust as needed)
+  enforceTableCollisionConstraint(position_d_, rotvec, gripper_width, table_height_threshold);
 }
 
 std::array<double, 7> HybridJointImpedanceController::saturateTorqueRate(
@@ -290,6 +295,8 @@ void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::Po
 
   std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
   position_d_target_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+
+  // Eigen::Vector3d target_position(position_d_target_);
   
   Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
   orientation_d_target_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
@@ -385,7 +392,7 @@ void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::Po
   for (size_t i = 0; i < 7; i++) {
     q_d_[i] = q[i];
   }
-}  // namespace franka_interactive_controllers
+}  
 
 void HybridJointImpedanceController::complianceParamCallback(
     franka_interactive_controllers::compliance_param_hybridConfig& config,
@@ -410,6 +417,29 @@ void HybridJointImpedanceController::complianceParamCallback(
   cartesian_damping_target_(4, 4) = 2.0 * sqrt(config.rotational_stiffness_y);
   cartesian_damping_target_(5, 5) = 2.0 * sqrt(config.rotational_stiffness_z);
 }
+
+void HybridJointImpedanceController::enforceTableCollisionConstraint(
+    Eigen::Vector3d& pos, const Eigen::Vector3d& rotvec, double gripper_width, double height_threshold)
+{
+  double finger_thickness = 25.5 / 1000.0;
+  std::vector<Eigen::Vector3d> keypoints;
+  for (int dx : {-1, 1}) {
+    for (int dy : {-1, 1}) {
+      keypoints.emplace_back(dx * gripper_width / 2.0, dy * finger_thickness / 2.0, 0.0);
+    }
+  }
+
+  Eigen::Matrix3d rot = Eigen::AngleAxisd(rotvec.norm(), rotvec.normalized()).toRotationMatrix();
+  double min_z = std::numeric_limits<double>::infinity();
+  for (const auto& pt : keypoints) {
+    Eigen::Vector3d world_pt = rot * pt + pos;
+    min_z = std::min(min_z, world_pt.z());
+  }
+
+  double delta = std::max(height_threshold - min_z, 0.0);
+  pos.z() += delta;
+}
+
 
 void HybridJointImpedanceController::violationCheckCallback(const ros::TimerEvent&) {
   if (violation_triggered_) {
@@ -436,9 +466,9 @@ void HybridJointImpedanceController::violationCheckCallback(const ros::TimerEven
     // Prevent repeated attempts
     violation_triggered_ = false;
   }
-}
+} 
 
-}
+} // namespace franka_interactive_controllers
 
 PLUGINLIB_EXPORT_CLASS(franka_interactive_controllers::HybridJointImpedanceController,
                        controller_interface::ControllerBase)
