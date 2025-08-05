@@ -76,7 +76,7 @@ def main():
     command_latency = dt / 2
 
     # Publisher for Cartesian pose
-    pose_pub = rospy.Publisher('/cartesian_pose_impedance_controller/desired_pose', PoseStamped, queue_size=1)
+    pose_pub = rospy.Publisher('/hybrid_joint_impedance_controller/desired_pose', PoseStamped, queue_size=1)
     rospy.loginfo("ROS publisher ready.")
 
     # # Dynamic Reconfigure Client for stiffness updates
@@ -180,12 +180,12 @@ def main():
                 dwidth = gripper_speed / frequency
             gripper_width = np.clip(gripper_width + dwidth, 0.0, max_gripper_width)
 
-            print(f"[DEBUG] dpos: {dpos}, drot_xyz: {drot_xyz}")
-            print(f"[DEBUG] Updated target pose: {target_pose}")
+            # print(f"[DEBUG] dpos: {dpos}, drot_xyz: {drot_xyz}")
+            # print(f"[DEBUG] Updated target pose: {target_pose}")
 
             # Send to ROS
             publish_pose(pose_pub, target_pose)
-            print(f"[Iter {iter_idx}] Pose: {target_pose[:3]}, Gripper width: {gripper_width:.3f}", end='\r')
+            # print(f"[Iter {iter_idx}] Pose: {target_pose[:3]}, Gripper width: {gripper_width:.3f}", end='\r')
 
             precise_wait(t_cycle_end)
             iter_idx += 1
