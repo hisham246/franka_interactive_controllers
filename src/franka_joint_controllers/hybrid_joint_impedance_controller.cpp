@@ -276,7 +276,7 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   Eigen::Vector3d rotvec = aa.angle() * aa.axis();
   double gripper_width = 0.08;  // 8 cm typical Panda gripper max
   double table_height_threshold = 0.025; // 2.5 cm above table (adjust as needed)
-  enforceTableCollisionConstraint(position_d_, rotvec, gripper_width, table_height_threshold);
+  enforceTableCollisionConstraint(position_d_, rotvec, table_height_threshold);
 }
 
 std::array<double, 7> HybridJointImpedanceController::saturateTorqueRate(
@@ -419,27 +419,33 @@ void HybridJointImpedanceController::complianceParamCallback(
 }
 
 void HybridJointImpedanceController::enforceTableCollisionConstraint(
-    Eigen::Vector3d& pos, const Eigen::Vector3d& rotvec, double gripper_width, double height_threshold)
+    Eigen::Vector3d& pos, const Eigen::Vector3d& rotvec, double height_threshold)
 {
-  double finger_thickness = 25.5 / 1000.0;
+  const double gripper_width = 0.1;               // Fixed for safety
+  const double finger_thickness = 25.5 / 1000.0;  // Side pad thickness (m)
+  const double gripper_height = 0.06;             // Height of gripper above fingertips (m)
+
   std::vector<Eigen::Vector3d> keypoints;
   for (int dx : {-1, 1}) {
     for (int dy : {-1, 1}) {
-      keypoints.emplace_back(dx * gripper_width / 2.0, dy * finger_thickness / 2.0, 0.0);
+      keypoints.emplace_back(
+          dx * gripper_width / 2.0,
+          dy * finger_thickness / 2.0,
+          gripper_height
+      );
     }
   }
 
   Eigen::Matrix3d rot = Eigen::AngleAxisd(rotvec.norm(), rotvec.normalized()).toRotationMatrix();
   double min_z = std::numeric_limits<double>::infinity();
   for (const auto& pt : keypoints) {
-    Eigen::Vector3d world_pt = rot * pt + pos;
+    Eigen::Vector3d world_pt = rot * pt + pos;  // Transform from fingertip frame to world
     min_z = std::min(min_z, world_pt.z());
   }
 
   double delta = std::max(height_threshold - min_z, 0.0);
   pos.z() += delta;
 }
-
 
 void HybridJointImpedanceController::violationCheckCallback(const ros::TimerEvent&) {
   if (violation_triggered_) {

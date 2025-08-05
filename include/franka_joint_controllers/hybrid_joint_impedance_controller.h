@@ -106,7 +106,7 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
   void violationCheckCallback(const ros::TimerEvent&);
   bool violation_triggered_ = false;
   ros::Timer violation_check_timer_;
-  void enforceTableCollisionConstraint(Eigen::Vector3d& pos, const Eigen::Vector3d& rotvec, double gripper_width, double height_threshold);
+  void enforceTableCollisionConstraint(Eigen::Vector3d& pos, const Eigen::Vector3d& rotvec, double height_threshold);
 
 };
 
