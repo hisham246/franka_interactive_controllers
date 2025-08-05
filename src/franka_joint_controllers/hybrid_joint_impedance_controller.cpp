@@ -275,7 +275,7 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   Eigen::AngleAxisd aa(orientation_d_);
   Eigen::Vector3d rotvec = aa.angle() * aa.axis();
   double gripper_width = 0.08;  // 8 cm typical Panda gripper max
-  double table_height_threshold = 0.025; // 2.5 cm above table (adjust as needed)
+  double table_height_threshold = 0.01; // 2.5 cm above table (adjust as needed)
   enforceTableCollisionConstraint(position_d_, rotvec, table_height_threshold);
 }
 
