@@ -422,7 +422,7 @@ void HybridJointImpedanceController::enforceTableCollisionConstraint(
 {
   const double gripper_width = 0.1;               // Fixed for safety
   const double finger_thickness = 25.5 / 1000.0;  // Side pad thickness (m)
-  const double gripper_height = 0.06;             // Height of gripper above fingertips (m)
+  // const double gripper_height = 0.06;             // Height of gripper above fingertips (m)
 
   std::vector<Eigen::Vector3d> keypoints;
   for (int dx : {-1, 1}) {
@@ -430,7 +430,7 @@ void HybridJointImpedanceController::enforceTableCollisionConstraint(
       keypoints.emplace_back(
           dx * gripper_width / 2.0,
           dy * finger_thickness / 2.0,
-          gripper_height
+          0.0
       );
     }
   }
