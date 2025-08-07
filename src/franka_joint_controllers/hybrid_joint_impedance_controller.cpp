@@ -274,7 +274,7 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
 
   Eigen::AngleAxisd aa(orientation_d_);
   Eigen::Vector3d rotvec = aa.angle() * aa.axis();
-  double table_height_threshold = 0.025; // 2.5 cm above table (adjust as needed)
+  double table_height_threshold = 0.02; // 2.5 cm above table (adjust as needed)
   enforceTableCollisionConstraint(position_d_, rotvec, table_height_threshold);
 }
 
@@ -421,7 +421,7 @@ void HybridJointImpedanceController::enforceTableCollisionConstraint(
     Eigen::Vector3d& pos, const Eigen::Vector3d& rotvec, double height_threshold)
 {
   const double gripper_width = 0.1;               // Fixed for safety
-  const double finger_thickness = 25.5 / 1000.0;  // Side pad thickness (m)
+  const double finger_thickness = 55.5 / 1000.0;  // Side pad thickness (m)
   // const double gripper_height = 0.06;             // Height of gripper above fingertips (m)
 
   std::vector<Eigen::Vector3d> keypoints;
