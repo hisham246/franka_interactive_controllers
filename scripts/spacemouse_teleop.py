@@ -170,7 +170,7 @@ def main():
             # Update target pose
             target_pose[:3] += dpos
             target_pose[3:] = (drot * st.Rotation.from_rotvec(target_pose[3:])).as_rotvec()
-            target_pose[2] = max(target_pose[2], 0.05)  # safety Z min
+            # target_pose[2] = max(target_pose[2], 0.05)  # safety Z min
 
             # Gripper emulation (for print/log only)
             dwidth = 0
