@@ -38,6 +38,7 @@ class VicUmiEnv:
             # robot_interface,
             gripper_ip,
             gripper_port=4242,
+            # gripper_port=50052,
             # env params
             frequency=10,
             # obs

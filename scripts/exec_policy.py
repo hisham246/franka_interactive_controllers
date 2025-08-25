@@ -41,9 +41,11 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 def main():
-    output = '/home/hisham246/uwaterloo/test'
+    output = '/home/hisham246/uwaterloo/surface_wiping_unet'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
+    # gripper_ip = '129.97.71.19'
+    # gripper_port = 50052
     match_dataset = None
     match_camera = 0
     steps_per_inference = 1
@@ -61,7 +63,7 @@ def main():
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
 
     # Compliance policy unet
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
