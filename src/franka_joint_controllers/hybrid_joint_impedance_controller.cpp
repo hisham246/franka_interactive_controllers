@@ -274,7 +274,7 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
 
   Eigen::AngleAxisd aa(orientation_d_);
   Eigen::Vector3d rotvec = aa.angle() * aa.axis();
-  double table_height_threshold = 0.02; // 2.5 cm above table (adjust as needed)
+  double table_height_threshold = 0.005; // 5 mm above table (adjust as needed)
   enforceTableCollisionConstraint(position_d_, rotvec, table_height_threshold);
 }
 
