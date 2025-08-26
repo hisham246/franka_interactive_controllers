@@ -60,10 +60,10 @@ def main():
     temporal_ensembling = True 
             
     # Diffusion Transformer
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_transformer_pickplace.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
 
     # Compliance policy unet
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
@@ -71,9 +71,14 @@ def main():
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
 
-    cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
-    cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
-    cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
+    # cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
+    # cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
+    # cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
+    # cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
+
+    cfg._target_ = "diffusion_policy.train_diffusion_transformer_timm_workspace.TrainDiffusionTransformerTimmWorkspace"
+    cfg.policy._target_ = "diffusion_policy.diffusion_transformer_timm_policy.DiffusionTransformerTimmPolicy"
+    cfg.policy.obs_encoder._target_ = "policy_utils.transformer_obs_encoder.TransformerObsEncoder"
     cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
 
     # setup experiment
@@ -134,26 +139,26 @@ def main():
             print("Waiting for camera")
             time.sleep(1.0)
 
-            # load match_dataset
-            episode_first_frame_map = dict()
-            match_replay_buffer = None
-            if match_dataset is not None:
-                match_dir = pathlib.Path(match_dataset)
-                match_zarr_path = match_dir.joinpath('replay_buffer.zarr')
-                match_replay_buffer = ReplayBuffer.create_from_path(str(match_zarr_path), mode='r')
-                match_video_dir = match_dir.joinpath('videos')
-                for vid_dir in match_video_dir.glob("*/"):
-                    episode_idx = int(vid_dir.stem)
-                    match_video_path = vid_dir.joinpath(f'{match_camera}.mp4')
-                    if match_video_path.exists():
-                        img = None
-                        with av.open(str(match_video_path)) as container:
-                            stream = container.streams.video[0]
-                            for frame in container.decode(stream):
-                                img = frame.to_ndarray(format='rgb24')
-                                break
-                        episode_first_frame_map[episode_idx] = img
-            print(f"Loaded initial frame for {len(episode_first_frame_map)} episodes")
+            # # load match_dataset
+            # episode_first_frame_map = dict()
+            # match_replay_buffer = None
+            # if match_dataset is not None:
+            #     match_dir = pathlib.Path(match_dataset)
+            #     match_zarr_path = match_dir.joinpath('replay_buffer.zarr')
+            #     match_replay_buffer = ReplayBuffer.create_from_path(str(match_zarr_path), mode='r')
+            #     match_video_dir = match_dir.joinpath('videos')
+            #     for vid_dir in match_video_dir.glob("*/"):
+            #         episode_idx = int(vid_dir.stem)
+            #         match_video_path = vid_dir.joinpath(f'{match_camera}.mp4')
+            #         if match_video_path.exists():
+            #             img = None
+            #             with av.open(str(match_video_path)) as container:
+            #                 stream = container.streams.video[0]
+            #                 for frame in container.decode(stream):
+            #                     img = frame.to_ndarray(format='rgb24')
+            #                     break
+            #             episode_first_frame_map[episode_idx] = img
+            # print(f"Loaded initial frame for {len(episode_first_frame_map)} episodes")
 
             # creating model
             # have to be done after fork to prevent 
