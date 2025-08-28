@@ -235,8 +235,8 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
 
   Eigen::Matrix<double, 7, 1> tau_d_calculated_eigen = 
     coriolis_factor_ * Eigen::Map<const Eigen::Matrix<double, 7, 1>>(coriolis.data()) 
-    + Kp * q_error
-    + Kd * dq_error;
+    + Kp * q_error * 0.0
+    + Kd * dq_error * 0.0;
 
   std::array<double, 7> tau_d_calculated;
   Eigen::VectorXd::Map(tau_d_calculated.data(), 7) = tau_d_calculated_eigen;

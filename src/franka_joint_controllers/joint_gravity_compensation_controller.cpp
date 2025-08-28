@@ -35,21 +35,21 @@ bool JointGravityCompensationController::init(hardware_interface::RobotHW* robot
     return false;
   }
 
-  // Initialize variables for tool compensation from yaml config file
-  activate_tool_compensation_ = true;
-  std::vector<double> external_tool_compensation;
-  if (!node_handle.getParam("external_tool_compensation", external_tool_compensation)) {
-      ROS_ERROR(
-          "JointGravityCompensationController: Invalid or no external_tool_compensation parameters provided, "
-          "aborting controller init!");
-      return false;
-    }
+  // // Initialize variables for tool compensation from yaml config file
+  // activate_tool_compensation_ = true;
+  // std::vector<double> external_tool_compensation;
+  // if (!node_handle.getParam("external_tool_compensation", external_tool_compensation)) {
+  //     ROS_ERROR(
+  //         "JointGravityCompensationController: Invalid or no external_tool_compensation parameters provided, "
+  //         "aborting controller init!");
+  //     return false;
+  //   }
 
-  tool_compensation_force_.setZero();  
-  for (size_t i = 0; i < 6; ++i) 
-    tool_compensation_force_[i] = external_tool_compensation.at(i);
-  ROS_INFO_STREAM("External tool compensation force: " << std::endl << tool_compensation_force_);
-  // tool_compensation_force_ << 0.46, -0.17, -1.64, 0, 0, 0;  //read from yaml
+  // tool_compensation_force_.setZero();  
+  // for (size_t i = 0; i < 6; ++i) 
+  //   tool_compensation_force_[i] = external_tool_compensation.at(i);
+  // ROS_INFO_STREAM("External tool compensation force: " << std::endl << tool_compensation_force_);
+  // // tool_compensation_force_ << 0.46, -0.17, -1.64, 0, 0, 0;  //read from yaml
 
   // Getting libranka control interfaces
   auto* model_interface = robot_hw->get<franka_hw::FrankaModelInterface>();
@@ -178,13 +178,13 @@ void JointGravityCompensationController::update(const ros::Time& /*time*/,
   }
 
   // Desired torque (Check this.. might not be necessary)
-  tau_d << tau_task + coriolis - tau_tool;
+  // tau_d << tau_task + coriolis;
 
   // Alternative 
-  // tau_d.setZero();
+  tau_d.setZero();
 
   // Saturate torque rate to avoid discontinuities
-  tau_d << saturateTorqueRate(tau_d, tau_J_d);
+  // tau_d << saturateTorqueRate(tau_d, tau_J_d);
 
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
