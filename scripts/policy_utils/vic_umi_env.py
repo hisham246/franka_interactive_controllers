@@ -28,8 +28,6 @@ class Command(enum.Enum):
     STOP = 0
     SERVOL = 1
     SCHEDULE_WAYPOINT = 2
-    SET_IMPEDANCE = 3
-
 
 class VicUmiEnv:
     def __init__(self, 

@@ -1,0 +1,7 @@
+# To kill Panda process from my laptop
+
+ssh robohub@labwork4 (password: robohub)
+docker exec -it uw_panda_robohub /root/docker_entrypoint.sh
+source /opt/ros/noetic/setup.bash
+source panda_ws/devel/setup.bash
+kill -9 $(pidof franka_control_node)

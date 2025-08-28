@@ -185,6 +185,7 @@ catkin_install_python(
   scripts/spacemouse_teleop_joint_impedance.py
   scripts/move_gripper.py
   scripts/joint_impedance_test.py
+  scripts/replay_traj.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
