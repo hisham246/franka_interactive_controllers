@@ -235,8 +235,8 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
 
   Eigen::Matrix<double, 7, 1> tau_d_calculated_eigen = 
     coriolis_factor_ * Eigen::Map<const Eigen::Matrix<double, 7, 1>>(coriolis.data()) 
-    + Kp * q_error * 0.0
-    + Kd * dq_error * 0.0;
+    + Kp * q_error
+    + Kd * dq_error;
 
   std::array<double, 7> tau_d_calculated;
   Eigen::VectorXd::Map(tau_d_calculated.data(), 7) = tau_d_calculated_eigen;
@@ -257,12 +257,16 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   // 1000 * (1 / sampling_time).
   std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
 
+  for (size_t i=0; i<7; i++){
+    tau_d_calculated[i] = 0.0;
+  }
+
   // for (size_t i=0; i<7; i++){
   //   q_d_[i] = target_q_d_[i] * q_filt_ + q_d_[i] * (1 - q_filt_);
   // }
     
   for (size_t i = 0; i < 7; i++) {
-    joint_handles_[i].setCommand(tau_d_saturated[i]);
+    joint_handles_[i].setCommand(tau_d_calculated[i]);
   }
 
   // cartesian_stiffness_ =

@@ -35,7 +35,7 @@ class FrankaROSInterface:
                  joint_state_desired_topic='/joint_states_desired',
                  franka_state_topic='/franka_state_controller/franka_states'):
         
-        self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
+        # self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
         self.dyn_client = DynClient(impedance_config_ns)
 
         # State variables - actual
@@ -554,7 +554,7 @@ class FrankaVariableImpedanceController(mp.Process):
                 # Compute interpolated pose and publish
                 ee_pose = pose_interp(t_now)
                 # print("[Robot] Interpolated EE pose:", ee_pose)
-                robot.update_desired_ee_pose(ee_pose)
+                # robot.update_desired_ee_pose(ee_pose)
 
                 # Log data with error handling
                 if logger:

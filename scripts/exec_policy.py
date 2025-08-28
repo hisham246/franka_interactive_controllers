@@ -16,6 +16,9 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 import json
+import pandas as pd
+from datetime import datetime
+
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR))
@@ -60,10 +63,10 @@ def main():
     temporal_ensembling = True 
             
     # Diffusion Transformer
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
 
     # Diffusion UNet
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
 
     # Compliance policy unet
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_compliance_trial_2.ckpt'
@@ -71,15 +74,15 @@ def main():
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
 
-    # cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
-    # cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
-    # cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
-    # cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
-
-    cfg._target_ = "diffusion_policy.train_diffusion_transformer_timm_workspace.TrainDiffusionTransformerTimmWorkspace"
-    cfg.policy._target_ = "diffusion_policy.diffusion_transformer_timm_policy.DiffusionTransformerTimmPolicy"
-    cfg.policy.obs_encoder._target_ = "policy_utils.transformer_obs_encoder.TransformerObsEncoder"
+    cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
+    cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
+    cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
     cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
+
+    # cfg._target_ = "diffusion_policy.train_diffusion_transformer_timm_workspace.TrainDiffusionTransformerTimmWorkspace"
+    # cfg.policy._target_ = "diffusion_policy.diffusion_transformer_timm_policy.DiffusionTransformerTimmPolicy"
+    # cfg.policy.obs_encoder._target_ = "policy_utils.transformer_obs_encoder.TransformerObsEncoder"
+    # cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
 
     # setup experiment
     dt = 1/frequency
@@ -361,11 +364,12 @@ def main():
                     print("Interrupted!")
                     # stop robot.
                     env.end_episode()
-                    # if len(action_log) > 0:
-                    #     df = pd.DataFrame(action_log)
-                    #     # csv_path = os.path.join(output, f"policy_actions_episode_{episode_id}.csv")
-                    #     df.to_csv(csv_path, index=False)
-                    #     print(f"Saved actions to {csv_path}")
+                    if len(action_log) > 0:
+                        df = pd.DataFrame(action_log)
+                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
+                        df.to_csv(csv_path, index=False)
+                        print(f"Saved actions to {csv_path}")
                     
                 print("Stopped.")
 

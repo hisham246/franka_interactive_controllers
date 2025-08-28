@@ -217,8 +217,8 @@ class VicUmiEnv:
             frequency=1000,
             verbose=False,
             receive_latency=robot_obs_latency,
-            output_dir=output_dir,
-            episode_id=self.episode_id_counter        
+            output_dir=output_dir
+            # episode_id=self.episode_id_counter        
             )
         
         gripper = FrankaHandController(
