@@ -37,8 +37,8 @@ class PoseReplayer:
         self.has_time = "time" in self.df.columns
 
         # Cache the first CSV pose (for relative mode)
-        self.csv0_pos = self.df.loc[self.df.index[0], ["x","y","z"]].values.astype(float)
-        self.csv0_rv  = self.df.loc[self.df.index[0], ["rx","ry","rz"]].values.astype(float)
+        self.csv0_pos = self.df.loc[self.df.index[0], ["ee_pos_0","ee_pos_1","ee_pos_2"]].values.astype(float)
+        self.csv0_rv  = self.df.loc[self.df.index[0], ["ee_rot_0","ee_rot_1","ee_rot_2"]].values.astype(float)
         self.csv0_quat = R.from_rotvec(self.csv0_rv).as_quat()
 
         # Subscriber for live state (like your circle node)
@@ -110,8 +110,8 @@ class PoseReplayer:
 
     def _absolute_pose_from_row(self, row):
         """CSV is assumed already in frame_id; use directly."""
-        xyz = row[["x","y","z"]].values.astype(float)
-        rv  = row[["rx","ry","rz"]].values.astype(float)
+        xyz = row[["ee_pos_0","ee_pos_1","ee_pos_2"]].values.astype(float)
+        rv  = row[["ee_rot_0","ee_rot_1","ee_rot_2"]].values.astype(float)
         return np.concatenate([xyz, rv])
 
     def _relative_pose_from_row(self, row):
@@ -123,8 +123,8 @@ class PoseReplayer:
         Then convert to rotvec for publishing (to use your exact update function).
         """
         assert self.current_pos is not None and self.current_quat is not None
-        csv_pos = row[["x","y","z"]].values.astype(float)
-        csv_rv  = row[["rx","ry","rz"]].values.astype(float)
+        csv_pos = row[["ee_pos_0","ee_pos_1","ee_pos_2"]].values.astype(float)
+        csv_rv  = row[["ee_rot_0","ee_rot_1","ee_rot_2"]].values.astype(float)
         q_csv   = R.from_rotvec(csv_rv).as_quat()
 
         # position
@@ -194,10 +194,10 @@ class PoseReplayer:
 def main():
     rospy.init_node("pose_csv_replayer_with_state")
 
-    csv_path = rospy.get_param("~csv_path", "/home/hisham246/uwaterloo/umi/surface_wiping_tp/dataset/predictions/episode_117_pred_pose.csv")
+    csv_path = rospy.get_param("~csv_path", "/home/hisham246/uwaterloo/surface_wiping_unet/policy_actions_20250828_231539.csv")
     topic    = rospy.get_param("~topic", "/hybrid_joint_impedance_controller/desired_pose")
     frame_id = rospy.get_param("~frame_id", "panda_link0")
-    rate     = float(rospy.get_param("~rate", 100.0))
+    rate     = float(rospy.get_param("~rate", 10.0))
     repeat   = bool(rospy.get_param("~repeat", False))
 
     # "absolute" uses CSV poses as-is; "relative" anchors the CSV to current EE pose

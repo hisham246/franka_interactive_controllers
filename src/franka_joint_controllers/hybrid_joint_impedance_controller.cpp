@@ -221,13 +221,14 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   }
 
   Eigen::Matrix<double, 7, 1> q_error;
+  Eigen::Matrix<double, 7, 1> dq_error;
+
   // Eigen::Matrix<double, 7, 1> dq_error;
   // for (size_t i = 0; i < 7; ++i) {
   //   q_error[i] = q_d_[i] - q_[i];
   //   dq_error[i] = robot_state.dq_d[i] - dq_filtered_[i];
   // }
 
-  Eigen::Matrix<double, 7, 1> dq_error;
   for (size_t i = 0; i < 7; ++i) {
     q_error[i] = q_d_[i] - q_[i];
     dq_error[i] = dq_d_[i] - dq_filtered_[i];

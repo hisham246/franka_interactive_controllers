@@ -74,11 +74,11 @@ class VicUmiEnv:
             ):
         output_dir = pathlib.Path(output_dir)
         assert output_dir.parent.is_dir()
-        # video_dir = output_dir.joinpath('videos')
-        # video_dir.mkdir(parents=True, exist_ok=True)
-        # zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
-        # replay_buffer = ReplayBuffer.create_from_path(
-        #     zarr_path=zarr_path, mode='a')
+        video_dir = output_dir.joinpath('videos')
+        video_dir.mkdir(parents=True, exist_ok=True)
+        zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
+        replay_buffer = ReplayBuffer.create_from_path(
+            zarr_path=zarr_path, mode='a')
 
         if shm_manager is None:
             shm_manager = SharedMemoryManager()
@@ -208,8 +208,8 @@ class VicUmiEnv:
             verbose=False
         )
 
-        # self.replay_buffer = replay_buffer
-        # self.episode_id_counter = self.replay_buffer.n_episodes
+        self.replay_buffer = replay_buffer
+        self.episode_id_counter = self.replay_buffer.n_episodes
         
         robot = FrankaVariableImpedanceController(
             shm_manager=shm_manager,
@@ -217,8 +217,8 @@ class VicUmiEnv:
             frequency=1000,
             verbose=False,
             receive_latency=robot_obs_latency,
-            output_dir=output_dir
-            # episode_id=self.episode_id_counter        
+            output_dir=output_dir,
+            episode_id=self.episode_id_counter        
             )
         
         gripper = FrankaHandController(
@@ -252,7 +252,7 @@ class VicUmiEnv:
         self.gripper_obs_horizon = gripper_obs_horizon
         # recording
         self.output_dir = output_dir
-        # self.video_dir = video_dir
+        self.video_dir = video_dir
         # temp memory buffers
         self.last_camera_data = None
         # recording buffers
