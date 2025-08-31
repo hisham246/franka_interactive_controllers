@@ -378,6 +378,8 @@ class FrankaVariableImpedanceController(mp.Process):
         receive_latency=0.0,
         output_dir=None,
         episode_id=None,
+        max_pos_speed=0.25,
+        max_rot_speed=0.6
         ):
 
         super().__init__(name="FrankaVariableImpedanceController")
@@ -390,9 +392,10 @@ class FrankaVariableImpedanceController(mp.Process):
         self.soft_real_time = soft_real_time
         self.receive_latency = receive_latency
         self.verbose = verbose
-
         self.output_dir = pathlib.Path(output_dir) if output_dir is not None else None
         self.episode_id = episode_id
+        self.max_pos_speed = max_pos_speed
+        self.max_rot_speed = max_rot_speed
 
         if get_max_k is None:
             get_max_k = int(frequency * 5)
@@ -620,8 +623,8 @@ class FrankaVariableImpedanceController(mp.Process):
                         pose_interp = pose_interp.schedule_waypoint(
                             pose=target_pose,
                             time=target_time,
-                            # max_pos_speed=3.5,
-                            # max_rot_speed=3.5,                            
+                            max_pos_speed=self.max_pos_speed,
+                            max_rot_speed=self.max_rot_speed,
                             curr_time=curr_time,
                             last_waypoint_time=last_waypoint_time
                         )

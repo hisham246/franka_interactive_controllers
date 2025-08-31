@@ -36,7 +36,6 @@ class VicUmiEnv:
             # robot_interface,
             gripper_ip,
             gripper_port=4242,
-            # gripper_port=50052,
             # env params
             frequency=10,
             # obs
@@ -218,9 +217,11 @@ class VicUmiEnv:
             verbose=False,
             receive_latency=robot_obs_latency,
             output_dir=output_dir,
-            episode_id=self.episode_id_counter        
-            )
-        
+            episode_id=self.episode_id_counter,
+            max_pos_speed=self.max_pos_speed,
+            max_rot_speed=self.max_rot_speed
+        )
+
         gripper = FrankaHandController(
             host=gripper_ip,
             port=gripper_port,

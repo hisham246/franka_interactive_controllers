@@ -182,6 +182,12 @@ void HybridJointImpedanceController::starting(const ros::Time& /*time*/) {
 void HybridJointImpedanceController::update(const ros::Time& /*time*/,
                                              const ros::Duration& period) {
 
+  position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
+  orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
+
+  // Normalize quaternion
+  orientation_d_.normalize();
+
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();
   std::array<double, 42> jacobian_array =
@@ -223,7 +229,6 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   Eigen::Matrix<double, 7, 1> q_error;
   Eigen::Matrix<double, 7, 1> dq_error;
 
-  // Eigen::Matrix<double, 7, 1> dq_error;
   // for (size_t i = 0; i < 7; ++i) {
   //   q_error[i] = q_d_[i] - q_[i];
   //   dq_error[i] = robot_state.dq_d[i] - dq_filtered_[i];
@@ -252,6 +257,10 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
 //                           k_gains_[i] * (q_filtered_[i] - q_[i]) +
 //                           d_gains_[i] * (dq_d_[i] - dq_filtered_[i]);
 //                         }
+
+  // std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
+  // position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
+  // orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
   
 
   // Maximum torque difference with a sampling rate of 1 kHz. The maximum torque rate is
@@ -278,11 +287,6 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   cartesian_stiffness_  = cartesian_stiffness_target_;
   cartesian_damping_    = cartesian_damping_target_;
 
-  std::lock_guard<std::mutex> position_d_target_mutex_lock(
-    position_and_orientation_d_target_mutex_);
-  position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
-  orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
-
   Eigen::AngleAxisd aa(orientation_d_);
   Eigen::Vector3d rotvec = aa.angle() * aa.axis();
   double table_height_threshold = 0.005; // 5 mm above table (adjust as needed)
@@ -301,39 +305,51 @@ std::array<double, 7> HybridJointImpedanceController::saturateTorqueRate(
 }
 
 void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg)
-{
-
+{  
+  
   std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
   position_d_target_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
 
-  // Eigen::Vector3d target_position(position_d_target_);
-  
   Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
-  orientation_d_target_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
-      msg->pose.orientation.z, msg->pose.orientation.w;
-  
+  orientation_d_target_.coeffs() << msg->pose.orientation.x,
+                                    msg->pose.orientation.y,
+                                    msg->pose.orientation.z,
+                                    msg->pose.orientation.w;
+
+  // // normalize to unit quaternion
+  // orientation_d_target_.normalize();
+
+  // enforce hemisphere continuity
   if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
-    orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
+      orientation_d_target_.coeffs() = -orientation_d_target_.coeffs();
   }
 
+  // position_d_ = position_d_target_;
+  // orientation_d_ = orientation_d_target_;
+
+  // position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
+  // orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
+  
+  // Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
+  // orientation_d_target_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+  //     msg->pose.orientation.z, msg->pose.orientation.w;
+  
+  // if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
+  //   orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
+  // }
+
   // -------- Inverse Kinematics using Pinocchio --------
-  Eigen::Quaterniond quat(
-    orientation_d_.w(),
-    orientation_d_.x(),
-    orientation_d_.y(),
-    orientation_d_.z());
-  quat.normalize();
+  // Eigen::Quaterniond quat(
+  //   orientation_d_.w(),
+  //   orientation_d_.x(),
+  //   orientation_d_.y(),
+  //   orientation_d_.z());
+  // quat.normalize();
 
   pinocchio::SE3 oMdes(
       orientation_d_.toRotationMatrix(),
       position_d_
   );
-
-  // pinocchio::SE3 oMdes(
-  //     quat.toRotationMatrix(),
-  //     position_d_
-  // );
-
 
   // Use current joint positions as initial guess
   Eigen::VectorXd q(pinocchio_model_.nq);
