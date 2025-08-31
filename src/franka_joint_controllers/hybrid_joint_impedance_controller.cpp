@@ -32,6 +32,7 @@ bool HybridJointImpedanceController::init(hardware_interface::RobotHW* robot_hw,
     ros::TransportHints().reliable().tcpNoDelay());
 
   desired_joints_pub_ = node_handle.advertise<sensor_msgs::JointState>("/hybrid_joint_impedance_controller/desired_joint_positions", 10);
+  filtered_pose_pub_ = node_handle.advertise<geometry_msgs::PoseStamped>("/hybrid_joint_impedance_controller/filtered_pose", 10);
 
 
   std::string arm_id;
@@ -187,6 +188,21 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
 
   // Normalize quaternion
   orientation_d_.normalize();
+
+  // Publish filtered pose
+  geometry_msgs::PoseStamped pose_msg;
+  pose_msg.header.stamp = ros::Time::now();
+
+  pose_msg.pose.position.x = position_d_.x();
+  pose_msg.pose.position.y = position_d_.y();
+  pose_msg.pose.position.z = position_d_.z();
+
+  pose_msg.pose.orientation.x = orientation_d_.x();
+  pose_msg.pose.orientation.y = orientation_d_.y();
+  pose_msg.pose.orientation.z = orientation_d_.z();
+  pose_msg.pose.orientation.w = orientation_d_.w();
+
+  filtered_pose_pub_.publish(pose_msg);
 
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis = model_handle_->getCoriolis();

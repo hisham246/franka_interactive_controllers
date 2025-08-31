@@ -101,6 +101,7 @@ class HybridJointImpedanceController : public controller_interface::MultiInterfa
   pinocchio::FrameIndex ee_frame_id_;
 
   ros::Publisher desired_joints_pub_;
+  ros::Publisher filtered_pose_pub_;
 
   // Safety constraints
   void violationCheckCallback(const ros::TimerEvent&);

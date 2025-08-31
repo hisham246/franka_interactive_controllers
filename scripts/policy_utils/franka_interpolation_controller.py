@@ -557,7 +557,7 @@ class FrankaVariableImpedanceController(mp.Process):
                 # Compute interpolated pose and publish
                 ee_pose = pose_interp(t_now)
                 # print("[Robot] Interpolated EE pose:", ee_pose)
-                # robot.update_desired_ee_pose(ee_pose)
+                robot.update_desired_ee_pose(ee_pose)
 
                 # Log data with error handling
                 if logger:
