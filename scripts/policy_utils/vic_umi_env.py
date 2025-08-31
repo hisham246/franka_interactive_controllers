@@ -190,6 +190,9 @@ class VicUmiEnv:
                 return data
             vis_transform.append(vis_tf)
 
+        self.max_pos_speed = max_pos_speed
+        self.max_rot_speed = max_rot_speed
+
         camera = MultiUvcCamera(
             dev_video_paths=v4l_paths,
             shm_manager=shm_manager,
@@ -235,8 +238,6 @@ class VicUmiEnv:
         self.gripper = gripper
         self.frequency = frequency
         self.max_obs_buffer_size = max_obs_buffer_size
-        self.max_pos_speed = max_pos_speed
-        self.max_rot_speed = max_rot_speed
         self.mirror_crop = mirror_crop
         # timing
         self.align_camera_idx = align_camera_idx

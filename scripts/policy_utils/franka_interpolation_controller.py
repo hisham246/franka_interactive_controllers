@@ -33,7 +33,8 @@ class FrankaROSInterface:
                  ee_state_topic='/franka_state_controller/ee_pose',
                  joint_state_topic='/joint_states',
                  joint_state_desired_topic='/joint_states_desired',
-                 franka_state_topic='/franka_state_controller/franka_states'):
+                 franka_state_topic='/franka_state_controller/franka_states',
+                 filtered_pose_topic='/hybrid_joint_impedance_controller/filtered_pose'):
         
         self.pose_pub = rospy.Publisher(pose_topic, PoseStamped, queue_size=1)
         self.dyn_client = DynClient(impedance_config_ns)
@@ -41,6 +42,7 @@ class FrankaROSInterface:
         # State variables - actual
         self.ee_pose = None
         self.ee_velocity = None  # Will be computed from pose history
+        self.filtered_ee_pose = None
         self.joint_positions = None
         self.joint_velocities = None
         self.joint_torques = None
@@ -81,6 +83,12 @@ class FrankaROSInterface:
         self.prev_ee_pose = current_pose.copy()
         self.prev_ee_timestamp = current_time
 
+    def _filtered_ee_pose_callback(self, msg: PoseStamped):
+        p = msg.pose.position
+        q = msg.pose.orientation
+        rotvec = R.from_quat([q.x, q.y, q.z, q.w]).as_rotvec()
+        self.filtered_ee_pose = np.array([p.x, p.y, p.z, *rotvec], dtype=np.float64)
+
     def _joint_state_callback(self, msg):
         """Actual joint states from /joint_states"""
         if len(msg.position) >= 7:
@@ -106,6 +114,9 @@ class FrankaROSInterface:
         while self.ee_pose is None and not rospy.is_shutdown():
             rospy.sleep(0.01)
         return self.ee_pose.copy() if self.ee_pose is not None else np.zeros(6)
+    
+    def get_filtered_ee_pose(self):
+        return self.filtered_ee_pose.copy() if self.filtered_ee_pose is not None else np.zeros(6)
 
     def get_ee_velocity(self):
         """Alias for get_actual_ee_velocity for backward compatibility"""
@@ -211,6 +222,8 @@ class FrankaDataLogger:
             'des_ee_x', 'des_ee_y', 'des_ee_z', 'des_ee_rx', 'des_ee_ry', 'des_ee_rz',
             # Actual EE pose
             'act_ee_x', 'act_ee_y', 'act_ee_z', 'act_ee_rx', 'act_ee_ry', 'act_ee_rz',
+            # Filtered EE pose
+            'filt_ee_x','filt_ee_y','filt_ee_z','filt_ee_rx','filt_ee_ry','filt_ee_rz',
             # Desired EE velocity (6D: vx,vy,vz,wx,wy,wz)
             'des_ee_vx', 'des_ee_vy', 'des_ee_vz', 'des_ee_wx', 'des_ee_wy', 'des_ee_wz',
             # Actual EE velocity  
@@ -242,7 +255,9 @@ class FrankaDataLogger:
         # Get all state data from robot interface
         desired_ee_pose = robot_interface.get_desired_ee_pose()
         actual_ee_pose = robot_interface.get_ee_pose()
-        
+
+        filtered_ee_pose = robot_interface.get_filtered_ee_pose()
+
         desired_ee_vel = robot_interface.get_desired_ee_velocity()
         actual_ee_vel = robot_interface.get_actual_ee_velocity()
         
@@ -258,7 +273,7 @@ class FrankaDataLogger:
         # Log to rosbag
         if self.use_rosbag:
             self._log_to_rosbag(timestamp, 
-                               desired_ee_pose, actual_ee_pose, 
+                               desired_ee_pose, actual_ee_pose, filtered_ee_pose,
                                desired_ee_vel, actual_ee_vel,
                                desired_joint_pos, actual_joint_pos, 
                                desired_joint_vel, actual_joint_vel,
@@ -267,18 +282,18 @@ class FrankaDataLogger:
         # Log to CSV
         if self.use_csv:
             self._log_to_csv(timestamp.to_sec(),
-                            desired_ee_pose, actual_ee_pose,
+                            desired_ee_pose, actual_ee_pose, filtered_ee_pose,
                             desired_ee_vel, actual_ee_vel,
                             desired_joint_pos, actual_joint_pos,
                             desired_joint_vel, actual_joint_vel,
                             desired_joint_torque, actual_joint_torque)
     
-    def _log_to_csv(self, timestamp, des_ee_pose, act_ee_pose, des_ee_vel, act_ee_vel,
+    def _log_to_csv(self, timestamp, des_ee_pose, act_ee_pose, filt_ee_pose, des_ee_vel, act_ee_vel,
                     des_joint_pos, act_joint_pos, des_joint_vel, act_joint_vel,
                     des_joint_torque, act_joint_torque):
         """Log data to CSV file"""
         row = ([timestamp] + 
-               list(des_ee_pose) + list(act_ee_pose) +
+               list(des_ee_pose) + list(act_ee_pose) + list(filt_ee_pose) +
                list(des_ee_vel) + list(act_ee_vel) +
                list(des_joint_pos) + list(act_joint_pos) +
                list(des_joint_vel) + list(act_joint_vel) +
@@ -287,7 +302,7 @@ class FrankaDataLogger:
         self.csv_writer.writerow(row)
         self.csv_file.flush()  # Ensure data is written immediately
     
-    def _log_to_rosbag(self, timestamp, des_ee_pose, act_ee_pose, des_ee_vel, act_ee_vel,
+    def _log_to_rosbag(self, timestamp, des_ee_pose, act_ee_pose, filt_ee_pose, des_ee_vel, act_ee_vel,
                       des_joint_pos, act_joint_pos, des_joint_vel, act_joint_vel,
                       des_joint_torque, act_joint_torque):
         """Log data to rosbag"""
@@ -299,7 +314,11 @@ class FrankaDataLogger:
         # Log actual EE pose  
         act_pose_msg = self._create_pose_msg(timestamp, act_ee_pose)
         self.bag.write('/franka_logger/actual_ee_pose', act_pose_msg, timestamp)
-        
+
+        # Log filtered EE pose
+        filt_pose_msg = self._create_pose_msg(timestamp, filt_ee_pose)
+        self.bag.write('/franka_logger/filtered_ee_pose', filt_pose_msg, timestamp)
+
         # Log EE velocities
         des_vel_msg = self._create_twist_msg(des_ee_vel)
         self.bag.write('/franka_logger/desired_ee_velocity', des_vel_msg, timestamp)
