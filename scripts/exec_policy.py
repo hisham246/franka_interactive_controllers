@@ -255,10 +255,7 @@ def main():
                             raw_action = result['action_pred'][0].detach().to('cpu').numpy()
                             action = get_real_umi_action(raw_action, obs, action_pose_repr)
 
-                            # print("Actions", action)
-
                             # print('Inference latency:', time.time() - s)
-
                             if temporal_ensembling:
                                 # scatter predictions into buffers for their target timesteps
                                 for j, a in enumerate(action):            # 'action' is shape (k, act_dim)
@@ -275,7 +272,7 @@ def main():
                                         if 0 <= t_now < len(temporal_action_buffer) else None)
                                 if cached and len(cached) > 0:
                                     # exponential weights: i=0 oldest, i=n-1 newest
-                                    m = 0.20  # example; tune via half-life
+                                    m = 0.01  # example; tune via half-life
                                     n = len(cached)
                                     w = np.exp(-m * np.arange(n))
                                     w = w / w.sum()
@@ -305,19 +302,61 @@ def main():
                                     'ee_rot_2': a[5]
                                 })
 
+                            # print("Action:", this_target_poses)
+
                             # execute one step
                             env.exec_actions(
                                 actions=np.stack(this_target_poses),
                                 timestamps=np.array(action_timestamps),
                                 compensate_latency=True
                             )
-                        #     if temporal_ensembling:
-                        #         for i, a in enumerate(action):
-                        #             target_step = iter_idx + i
-                        #             if target_step < len(temporal_action_buffer):
-                        #                 if temporal_action_buffer[target_step] is None:
-                        #                     temporal_action_buffer[target_step] = []
-                        #                 temporal_action_buffer[target_step].append(a)
+
+
+                        # _ = cv2.pollKey()
+                        press_events = key_counter.get_press_events()
+                        stop_episode = False
+                        for key_stroke in press_events:
+                            if key_stroke == KeyCode(char='s'):
+                                # Stop episode
+                                # Hand control back to human
+                                print('Stopped.')
+                                stop_episode = True
+
+                        t_since_start = time.time() - eval_t_start
+                        if t_since_start > max_duration:
+                            print("Max Duration reached.")
+                            stop_episode = True
+                        if stop_episode:
+                            env.end_episode()
+                            break
+
+                        # wait for execution
+                        precise_wait(t_cycle_end - frame_latency)
+
+                        iter_idx += steps_per_inference
+
+                except KeyboardInterrupt:
+                    print("Interrupted!")
+                    if len(action_log) > 0:
+                        df = pd.DataFrame(action_log)
+                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
+                        df.to_csv(csv_path, index=False)
+                        print(f"Saved actions to {csv_path}")
+                    # stop robot.
+                    env.end_episode()
+                    
+if __name__ == '__main__':
+    main()
+
+
+                            #     if temporal_ensembling:
+                        #             for i, a in enumerate(action):
+                        #                 target_step = iter_idx + i
+                        #                 if target_step < len(temporal_action_buffer):
+                        #                     if temporal_action_buffer[target_step] is None:
+                        #                         temporal_action_buffer[target_step] = []
+                        #                     temporal_action_buffer[target_step].append(a)
 
                         # action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                         
@@ -365,46 +404,10 @@ def main():
                         #         timestamps=np.array(action_timestamps),
                         #         compensate_latency=True
                         #     )
-                            # print(f"Submitted {len(this_target_poses)} steps of actions.")
+                        #     print(f"Submitted {len(this_target_poses)} steps of actions.")
                         # else:
                         #     print("No valid actions to submit.")
 
-                        # _ = cv2.pollKey()
-                        press_events = key_counter.get_press_events()
-                        stop_episode = False
-                        for key_stroke in press_events:
-                            if key_stroke == KeyCode(char='s'):
-                                # Stop episode
-                                # Hand control back to human
-                                print('Stopped.')
-                                stop_episode = True
-
-                        t_since_start = time.time() - eval_t_start
-                        if t_since_start > max_duration:
-                            print("Max Duration reached.")
-                            stop_episode = True
-                        if stop_episode:
-                            env.end_episode()
-                            break
-
-                        # wait for execution
-                        precise_wait(t_cycle_end - frame_latency)
-
-                        iter_idx += steps_per_inference
-
-                except KeyboardInterrupt:
-                    print("Interrupted!")
-                    if len(action_log) > 0:
-                        df = pd.DataFrame(action_log)
-                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
-                        df.to_csv(csv_path, index=False)
-                        print(f"Saved actions to {csv_path}")
-                    # stop robot.
-                    env.end_episode()
-                    
-if __name__ == '__main__':
-    main()
 
                     # iter_idx = 0
                     # action_log = []

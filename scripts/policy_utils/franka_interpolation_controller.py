@@ -25,7 +25,6 @@ class Command(enum.Enum):
     SERVOL = 1
     SCHEDULE_WAYPOINT = 2
 
-
 class FrankaROSInterface:
     def __init__(self,
                  pose_topic='/hybrid_joint_impedance_controller/desired_pose',
@@ -580,6 +579,8 @@ class FrankaVariableImpedanceController(mp.Process):
                 # print("[Robot] Interpolated EE pose:", ee_pose)
                 robot.update_desired_ee_pose(ee_pose)
 
+                # print("Updated the following pose", ee_pose)
+
                 # Log data with error handling
                 if logger:
                     try:
@@ -611,6 +612,7 @@ class FrankaVariableImpedanceController(mp.Process):
                     # print("[Robot] No command received.")
                     n_cmd = 0
 
+                print(f"Number of commands received: {n_cmd}")
                 for i in range(n_cmd):
                     command = dict()
                     for key, value in commands.items():
@@ -635,6 +637,8 @@ class FrankaVariableImpedanceController(mp.Process):
                             curr_time=curr_time
                         )
                         last_waypoint_time = t_insert
+                        print("Interpolated pose:", pose_interp)
+
                     elif cmd == Command.SCHEDULE_WAYPOINT.value:
                         # target_stiffness = command['target_stiffness']
                         target_pose = command['target_pose']
@@ -650,6 +654,7 @@ class FrankaVariableImpedanceController(mp.Process):
                             last_waypoint_time=last_waypoint_time
                         )
                         last_waypoint_time = target_time
+                        print("Interpolated pose:", pose_interp)
 
                     else:
                         keep_running = False

@@ -475,7 +475,7 @@ class VicUmiEnv:
         this_video_dir.mkdir(parents=True, exist_ok=True)
         n_cameras = 1
         video_paths = list()
-        print("This video dir:", this_video_dir)
+        # print("This video dir:", this_video_dir)
         for i in range(n_cameras):
             video_paths.append(str(this_video_dir.joinpath(f'{i}.mp4').absolute()))
             # video_path = this_video_dir
