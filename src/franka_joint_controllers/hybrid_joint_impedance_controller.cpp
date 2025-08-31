@@ -202,7 +202,7 @@ void HybridJointImpedanceController::update(const ros::Time& /*time*/,
   pose_msg.pose.orientation.z = orientation_d_.z();
   pose_msg.pose.orientation.w = orientation_d_.w();
 
-  ROS_INFO_STREAM("Filtered Pose: " << pose_msg);
+  // ROS_INFO_STREAM("Filtered Pose: " << pose_msg);
 
   filtered_pose_pub_.publish(pose_msg);
 
