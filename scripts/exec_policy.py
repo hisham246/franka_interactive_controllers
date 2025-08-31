@@ -48,7 +48,7 @@ def main():
     match_camera = 0
     steps_per_inference = 1
     vis_camera_idx = 0
-    max_duration = 60
+    max_duration = 120
     frequency = 10
     no_mirror = False
     sim_fov = None

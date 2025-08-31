@@ -63,6 +63,8 @@ class FrankaROSInterface:
         rospy.Subscriber(joint_state_topic, JointState, self._joint_state_callback)
         rospy.Subscriber(joint_state_desired_topic, JointState, self._joint_state_desired_callback)
         rospy.Subscriber(franka_state_topic, FrankaState, self._franka_state_callback)
+        rospy.Subscriber(filtered_pose_topic, PoseStamped, self._filtered_ee_pose_callback)
+
 
     def _ee_pose_callback(self, msg):
         pos = msg.position
