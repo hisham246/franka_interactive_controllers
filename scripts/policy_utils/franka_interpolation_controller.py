@@ -612,7 +612,7 @@ class FrankaVariableImpedanceController(mp.Process):
                     # print("[Robot] No command received.")
                     n_cmd = 0
 
-                print(f"Number of commands received: {n_cmd}")
+                # print(f"Number of commands received: {n_cmd}")
                 for i in range(n_cmd):
                     command = dict()
                     for key, value in commands.items():
@@ -637,7 +637,7 @@ class FrankaVariableImpedanceController(mp.Process):
                             curr_time=curr_time
                         )
                         last_waypoint_time = t_insert
-                        print("Interpolated pose:", pose_interp)
+                        # print("Interpolated pose:", pose_interp)
 
                     elif cmd == Command.SCHEDULE_WAYPOINT.value:
                         # target_stiffness = command['target_stiffness']
@@ -654,7 +654,7 @@ class FrankaVariableImpedanceController(mp.Process):
                             last_waypoint_time=last_waypoint_time
                         )
                         last_waypoint_time = target_time
-                        print("Interpolated pose:", pose_interp)
+                        # print("Interpolated pose:", pose_interp)
 
                     else:
                         keep_running = False

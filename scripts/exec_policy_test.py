@@ -267,7 +267,12 @@ def main():
                                 # Execute sequence of smoothed actions
                                 this_target_poses = []
                                 action_timestamps = []
-                                
+                            
+
+                                # Instead of using obs_timestamps, use current time
+                                current_time = time.time()
+                                execution_buffer = 0.0  # 100ms in the future
+
                                 for i in range(steps_per_inference):
                                     t_target = iter_idx + i
                                     if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
@@ -278,21 +283,22 @@ def main():
                                         w = w / w.sum()
                                         a_exec = np.average(np.stack(cached, axis=0), axis=0, weights=w)
                                         this_target_poses.append(a_exec)
-                                        action_timestamps.append(obs_timestamps[-1] + dt * (i + 1))
+                                        action_timestamps.append(current_time + execution_buffer + dt * i)  # Fixed timestamp
                                     elif i < len(action):
-                                        # Fallback to current action
                                         this_target_poses.append(action[i])
-                                        action_timestamps.append(obs_timestamps[-1] + dt * (i + 1))
-                                
+                                        action_timestamps.append(current_time + execution_buffer + dt * i)  # Fixed timestamp
+
                                 # Safety check
                                 if not this_target_poses:
                                     this_target_poses = [action[0]]
-                                    action_timestamps = [obs_timestamps[-1] + dt]
-                                    
+                                    action_timestamps = [current_time + execution_buffer]  # Fixed timestamp
+
                             else:
                                 # Standard execution without temporal ensembling
+                                current_time = time.time()
+                                execution_buffer = 0.2
                                 this_target_poses = action[:steps_per_inference]
-                                action_timestamps = [obs_timestamps[-1] + dt * (i + 1) for i in range(len(this_target_poses))]
+                                action_timestamps = [current_time + execution_buffer + dt * i for i in range(len(this_target_poses))]
 
                             # print('Inference latency:', time.time() - s)
                             for a, t in zip(this_target_poses, action_timestamps):
@@ -353,3 +359,172 @@ def main():
                     
 if __name__ == '__main__':
     main()
+
+
+                            #     for i in range(steps_per_inference):
+                            #         t_target = iter_idx + i
+                            #         if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
+                            #             cached = temporal_action_buffer[t_target]
+                            #             m = 0.01
+                            #             n = len(cached)
+                            #             w = np.exp(-m * np.arange(n))
+                            #             w = w / w.sum()
+                            #             a_exec = np.average(np.stack(cached, axis=0), axis=0, weights=w)
+                            #             this_target_poses.append(a_exec)
+                            #             action_timestamps.append(obs_timestamps[-1] + dt * (i + 1))
+                            #         elif i < len(action):
+                            #             # Fallback to current action
+                            #             this_target_poses.append(action[i])
+                            #             action_timestamps.append(obs_timestamps[-1] + dt * (i + 1))
+                                
+                            #     # Safety check
+                            #     if not this_target_poses:
+                            #         this_target_poses = [action[0]]
+                            #         action_timestamps = [obs_timestamps[-1] + dt]
+                                    
+                            # else:
+                            #     # Standard execution without temporal ensembling
+                            #     this_target_poses = action[:steps_per_inference]
+                            #     action_timestamps = [obs_timestamps[-1] + dt * (i + 1) for i in range(len(this_target_poses))]
+
+"""--------------------------------------------------------------------------------------------------------------------------------"""
+                        #     if temporal_ensembling:
+                        #             for i, a in enumerate(action):
+                        #                 target_step = iter_idx + i
+                        #                 if target_step < len(temporal_action_buffer):
+                        #                     if temporal_action_buffer[target_step] is None:
+                        #                         temporal_action_buffer[target_step] = []
+                        #                     temporal_action_buffer[target_step].append(a)
+
+                        # action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
+                        
+                        # if temporal_ensembling:
+                        #     ensembled_actions = []
+                        #     valid_timestamps = []
+                        #     for i in range(len(action)):
+                        #         target_step = iter_idx + i
+                        #         if target_step >= len(temporal_action_buffer):
+                        #             continue
+                        #         cached = temporal_action_buffer[target_step]
+                        #         if cached is None or len(cached) == 0:
+                        #             continue
+                        #         k = 0.01
+                        #         n = len(cached)
+                        #         weights = np.exp(-k * np.arange(n))
+                        #         weights = weights / weights.sum()
+                        #         ensembled_action = np.average(np.stack(cached), axis=0, weights=weights)
+                        #         ensembled_actions.append(ensembled_action)
+                        #         valid_timestamps.append(action_timestamps[i])
+
+                        #     this_target_poses = ensembled_actions
+                        #     action_timestamps = valid_timestamps
+                        # else:
+                        #     this_target_poses = action          
+                                               
+                        # # print("timestamps", valid_timestamps)
+
+                        # # Final execution
+                        # if len(this_target_poses) > 0:
+                        #     # log ensembled actions
+                        #     for a, t in zip(this_target_poses, action_timestamps):
+                        #         a = a.tolist()
+                        #         action_log.append({
+                        #             'timestamp': t,
+                        #             'ee_pos_0': a[0],
+                        #             'ee_pos_1': a[1],
+                        #             'ee_pos_2': a[2],
+                        #             'ee_rot_0': a[3],
+                        #             'ee_rot_1': a[4],
+                        #             'ee_rot_2': a[5]
+                        #         })
+                        #     env.exec_actions(
+                        #         actions=np.stack(this_target_poses),
+                        #         timestamps=np.array(action_timestamps),
+                        #         compensate_latency=True
+                        #     )
+                        #     print(f"Submitted {len(this_target_poses)} steps of actions.")
+                        # else:
+                        #     print("No valid actions to submit.")
+
+"---------------------------------------------------------------------------------------"
+                    # iter_idx = 0
+                    # action_log = []
+                    # k = 0.01  # exponential decay constant
+
+                    # while True:
+                    #     # Calculate timing for this control step
+                    #     t_cycle_end = t_start + (iter_idx + steps_per_inference) * dt
+
+                    #     # === 1. Get observations ===
+                    #     obs = env.get_obs()
+                    #     episode_start_pose = np.concatenate([
+                    #         obs[f'robot0_eef_pos'],
+                    #         obs[f'robot0_eef_rot_axis_angle']
+                    #     ], axis=-1)[-1]
+                    #     obs_timestamps = obs['timestamp']
+
+                    #     # === 2. Run inference (predict horizon of actions) ===
+                    #     with torch.no_grad():
+                    #         obs_dict_np = get_real_umi_obs_dict(
+                    #             env_obs=obs, shape_meta=cfg.task.shape_meta,
+                    #             obs_pose_repr=obs_pose_rep,
+                    #             episode_start_pose=episode_start_pose
+                    #         )
+                    #         obs_dict = dict_apply(obs_dict_np,
+                    #                             lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                    #         result = policy.predict_action(obs_dict)
+                    #         raw_action = result['action_pred'][0].detach().to('cpu').numpy()
+                    #         action_chunk = get_real_umi_action(raw_action, obs, action_pose_repr)
+                    #         del result
+
+                    #     # === 3. Insert chunk predictions into buffers ===
+                    #     for i, a in enumerate(action_chunk):
+                    #         target_step = iter_idx + i
+                    #         if target_step < len(temporal_action_buffer):
+                    #             if temporal_action_buffer[target_step] is None:
+                    #                 temporal_action_buffer[target_step] = []
+                    #             temporal_action_buffer[target_step].append(a)
+
+                    #     # === 4. Ensemble the CURRENT timestep only ===
+                    #     cached = temporal_action_buffer[iter_idx]
+                    #     ensembled_action = None
+                    #     if cached is not None and len(cached) > 0:
+                    #         weights = np.exp(-k * np.arange(len(cached)))
+                    #         weights /= weights.sum()
+                    #         ensembled_action = np.average(np.stack(cached), axis=0, weights=weights)
+
+                    #     # === 5. Execute and log exactly ONE action per step ===
+                    #     if ensembled_action is not None:
+                    #         exec_ts = obs_timestamps[-1] + dt  # schedule one step ahead
+                    #         env.exec_actions(
+                    #             actions=np.array([ensembled_action]),
+                    #             timestamps=np.array([exec_ts]),
+                    #             compensate_latency=True
+                    #         )
+                    #         action_log.append({
+                    #             'timestamp': exec_ts,
+                    #             'ee_pos_0': ensembled_action[0],
+                    #             'ee_pos_1': ensembled_action[1],
+                    #             'ee_pos_2': ensembled_action[2],
+                    #             'ee_rot_0': ensembled_action[3],
+                    #             'ee_rot_1': ensembled_action[4],
+                    #             'ee_rot_2': ensembled_action[5]
+                    #         })
+                    #     else:
+                    #         print("No ensembled action available this step.")
+
+                    #     # === 6. Stop conditions ===
+                    #     press_events = key_counter.get_press_events()
+                    #     stop_episode = any(key_stroke == KeyCode(char='s') for key_stroke in press_events)
+
+                    #     if time.time() - eval_t_start > max_duration:
+                    #         print("Max Duration reached.")
+                    #         stop_episode = True
+
+                    #     if stop_episode:
+                    #         env.end_episode()
+                    #         break
+
+                    #     # Wait until cycle end
+                    #     precise_wait(t_cycle_end - frame_latency)
+                    #     iter_idx += steps_per_inference
