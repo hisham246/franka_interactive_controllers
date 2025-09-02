@@ -419,7 +419,7 @@ class VicUmiEnv:
         print("is new:", is_new)
         new_actions = actions[is_new]
         new_timestamps = timestamps[is_new]
-        print("New actions:", new_actions)
+        # print("New actions:", new_actions)
 
 
         r_latency = self.robot_action_latency if compensate_latency else 0.0

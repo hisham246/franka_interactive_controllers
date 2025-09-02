@@ -292,7 +292,6 @@ def main():
                     precise_wait(eval_t_start - frame_latency, time_func=time.time)
                     print("Started!")
 
-
                     iter_idx = 0
                     # last_action_end_time = time.time()
                     action_log = []
@@ -379,6 +378,9 @@ def main():
 
                                     this_target_poses.append(a_exec)
                                     action_timestamps.append(current_time + execution_buffer + dt * i)
+                                    # action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
+                                    # action_timestamps.append(obs_timestamps[-1] + execution_buffer + dt * i)
+
 
                                 # safety fallback
                                 if not this_target_poses:
@@ -394,13 +396,15 @@ def main():
 
                                     this_target_poses = [a_exec]
                                     action_timestamps = [current_time + execution_buffer]
+                                    # action_timestamps = [obs_timestamps[-1] + execution_buffer]
 
                             else:
                                 # Standard execution without temporal ensembling
                                 current_time = time.time()
-                                execution_buffer = 0.0
+                                execution_buffer = 0.1
                                 this_target_poses = action[:steps_per_inference]
                                 action_timestamps = [current_time + execution_buffer + dt * i for i in range(len(this_target_poses))]
+                                # action_timestamps = [obs_timestamps[-1] + execution_buffer + dt * i for i in range(len(this_target_poses))]
 
                             # print('Inference latency:', time.time() - s)
                             for a, t in zip(this_target_poses, action_timestamps):
@@ -462,7 +466,7 @@ def main():
 if __name__ == '__main__':
     main()
 
-                                    # # Execute sequence of smoothed actions
+                                # # Execute sequence of smoothed actions
                                 # this_target_poses = []
                                 # action_timestamps = []
                             
