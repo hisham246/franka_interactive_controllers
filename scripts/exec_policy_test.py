@@ -6,7 +6,7 @@ import os
 import pathlib
 import time
 from multiprocessing.managers import SharedMemoryManager
-
+from scipy.spatial.transform import Rotation as R
 import av
 import cv2
 import dill
@@ -39,6 +39,66 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
                                                 get_real_umi_action)
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
+
+
+# ---- quat utilities ----
+def _q_norm(q): return q / (np.linalg.norm(q) + 1e-12)
+def _q_conj(q): return np.array([-q[0], -q[1], -q[2], q[3]])
+def _q_mul(a,b):
+    x1,y1,z1,w1 = a; x2,y2,z2,w2 = b
+    return np.array([
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        w1*w2 - x1*x2 - y1*y2 - z1*z2
+    ])
+def _slerp(q0,q1,t):
+    q0=_q_norm(q0); q1=_q_norm(q1)
+    if np.dot(q0,q1) < 0: q1 = -q1
+    d = np.clip(np.dot(q0,q1), -1.0, 1.0)
+    if d > 0.9995:
+        out = _q_norm(q0 + t*(q1-q0))
+    else:
+        th = np.arccos(d)
+        out = (np.sin((1-t)*th)*q0 + np.sin(t*th)*q1)/np.sin(th)
+    return _q_norm(out)
+def _geo_angle(q0,q1):
+    d = np.clip(abs(np.dot(_q_norm(q0), _q_norm(q1))), -1.0, 1.0)
+    return 2.0*np.arccos(d)  # [0, pi]
+
+# ---- geodesic mean around a reference quaternion ----
+def _weighted_mean_quats_around(q_ref, quats, weights):
+    # map each quat to tangent at q_ref, average, exp back
+    vecs = []
+    for q in quats:
+        if np.dot(q, q_ref) < 0: q = -q
+        q_err = _q_mul(_q_conj(q_ref), q)
+        rotvec = R.from_quat(q_err).as_rotvec()
+        vecs.append(rotvec)
+    vbar = np.average(np.stack(vecs, 0), axis=0, weights=weights)
+    q_delta = R.from_rotvec(vbar).as_quat()
+    return _q_mul(q_ref, q_delta)
+
+# ---- SE(3) step limiter ----
+def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
+    # translation
+    dp = p_cmd - p_prev
+    n = np.linalg.norm(dp)
+    max_dp = v_max * dt
+    if n > max_dp:
+        dp *= (max_dp / (n + 1e-12))
+    p_new = p_prev + dp
+    # rotation
+    ang = _geo_angle(q_prev, q_cmd)
+    max_dang = w_max * dt
+    if ang > max_dang + 1e-9:
+        t = max_dang / ang
+        q_new = _slerp(q_prev, q_cmd, t)
+    else:
+        # keep hemisphere continuity
+        q_new = q_cmd if np.dot(q_prev, q_cmd) >= 0 else -q_cmd
+    return p_new, _q_norm(q_new)
+
 
 def main():
     output = '/home/hisham246/uwaterloo/surface_wiping_unet'
@@ -182,6 +242,14 @@ def main():
                     obs[f'robot0_eef_pos'],
                     obs[f'robot0_eef_rot_axis_angle']
                 ], axis=-1)[-1]
+            
+            # ---- SE(3) state & limits ----
+            v_max = 0.15   # m/s (tune)
+            w_max = 0.8    # rad/s (tune)
+
+            p_last = obs['robot0_eef_pos'][-1].copy()
+            q_last = R.from_rotvec(obs['robot0_eef_rot_axis_angle'][-1].copy()).as_quat()
+
             # print("start pose", episode_start_pose)
             with torch.no_grad():
                 policy.reset()
@@ -255,6 +323,8 @@ def main():
                             raw_action = result['action_pred'][0].detach().to('cpu').numpy()
                             action = get_real_umi_action(raw_action, obs, action_pose_repr)
 
+                            g_now = float(action[-1, 6]) if action.ndim == 2 else float(action[6])
+
                             if temporal_ensembling:
                                 # Scatter predictions into buffers
                                 for j, a in enumerate(action):
@@ -267,31 +337,63 @@ def main():
                                 # Execute sequence of smoothed actions
                                 this_target_poses = []
                                 action_timestamps = []
-                            
 
-                                # Instead of using obs_timestamps, use current time
                                 current_time = time.time()
-                                execution_buffer = 0.0  # 100ms in the future
+                                execution_buffer = 0.2
 
                                 for i in range(steps_per_inference):
                                     t_target = iter_idx + i
                                     if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
-                                        cached = temporal_action_buffer[t_target]
+                                        cached = temporal_action_buffer[t_target]  # list of [x y z rx ry rz gripper]
                                         m = 0.01
                                         n = len(cached)
                                         w = np.exp(-m * np.arange(n))
                                         w = w / w.sum()
-                                        a_exec = np.average(np.stack(cached, axis=0), axis=0, weights=w)
-                                        this_target_poses.append(a_exec)
-                                        action_timestamps.append(current_time + execution_buffer + dt * i)  # Fixed timestamp
-                                    elif i < len(action):
-                                        this_target_poses.append(action[i])
-                                        action_timestamps.append(current_time + execution_buffer + dt * i)  # Fixed timestamp
 
-                                # Safety check
+                                        # positions: ordinary weighted mean
+                                        Ps = np.stack([c[:3] for c in cached], axis=0)
+                                        p_cmd = (Ps * w[:, None]).sum(axis=0)
+
+                                        # rotations: convert rotvec->quat, geodesic mean around q_last
+                                        quats = [R.from_rotvec(c[3:6]).as_quat() for c in cached]
+                                        q_cmd = _weighted_mean_quats_around(q_last, quats, w)
+
+                                    elif i < len(action):
+                                        p_cmd = action[i][:3]
+                                        q_cmd = R.from_rotvec(action[i][3:6]).as_quat()
+                                    else:
+                                        break
+
+                                    # Hard SE(3) rate limit around last commanded pose
+                                    p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
+
+                                    # Update "last" for next step in this cycle
+                                    p_last, q_last = p_safe, q_safe
+
+                                    # Compose target pose (rotvec from the safe quaternion)
+                                    a_exec = np.zeros_like(action[0])
+                                    a_exec[:3] = p_safe
+                                    a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
+                                    # a_exec[6]   = action[i][6] if i < len(action) else 0.0  # gripper unchanged if missing
+                                    a_exec[6] = g_now
+
+                                    this_target_poses.append(a_exec)
+                                    action_timestamps.append(current_time + execution_buffer + dt * i)
+
+                                # safety fallback
                                 if not this_target_poses:
-                                    this_target_poses = [action[0]]
-                                    action_timestamps = [current_time + execution_buffer]  # Fixed timestamp
+                                    # just rate-limit the first raw action
+                                    p_cmd = action[0][:3]
+                                    q_cmd = R.from_rotvec(action[0][3:6]).as_quat()
+                                    p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
+                                    p_last, q_last = p_safe, q_safe
+                                    a_exec = action[0].copy()
+                                    a_exec[:3] = p_safe
+                                    a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
+                                    a_exec[6] = g_now
+
+                                    this_target_poses = [a_exec]
+                                    action_timestamps = [current_time + execution_buffer]
 
                             else:
                                 # Standard execution without temporal ensembling
@@ -360,6 +462,35 @@ def main():
 if __name__ == '__main__':
     main()
 
+                                    # # Execute sequence of smoothed actions
+                                # this_target_poses = []
+                                # action_timestamps = []
+                            
+                                # # Instead of using obs_timestamps, use current time
+                                # current_time = time.time()
+                                # execution_buffer = 0.2  # 200ms in the future
+
+                                # for i in range(steps_per_inference):
+                                #     t_target = iter_idx + i
+                                #     if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
+                                #         cached = temporal_action_buffer[t_target]
+                                #         m = 0.01
+                                #         n = len(cached)
+                                #         w = np.exp(-m * np.arange(n))
+                                #         w = w / w.sum()
+                                #         a_exec = np.average(np.stack(cached, axis=0), axis=0, weights=w)
+                                #         this_target_poses.append(a_exec)
+                                #         action_timestamps.append(current_time + execution_buffer + dt * i)  # Fixed timestamp
+                                #     elif i < len(action):
+                                #         this_target_poses.append(action[i])
+                                #         action_timestamps.append(current_time + execution_buffer + dt * i)  # Fixed timestamp
+
+                                # # Safety check
+                                # if not this_target_poses:
+                                #     this_target_poses = [action[0]]
+                                #     action_timestamps = [current_time + execution_buffer]  # Fixed timestamp
+
+"""----------------------------------------------------------------------------------------------------------"""
 
                             #     for i in range(steps_per_inference):
                             #         t_target = iter_idx + i

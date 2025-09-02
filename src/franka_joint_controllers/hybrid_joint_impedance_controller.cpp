@@ -183,8 +183,6 @@ void HybridJointImpedanceController::starting(const ros::Time& /*time*/) {
 void HybridJointImpedanceController::update(const ros::Time& /*time*/,
                                              const ros::Duration& period) {
 
-
-  std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
   position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
   orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
 
@@ -327,7 +325,7 @@ std::array<double, 7> HybridJointImpedanceController::saturateTorqueRate(
 
 void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg)
 {  
-  
+  std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
   position_d_target_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
 
   Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
@@ -336,13 +334,13 @@ void HybridJointImpedanceController::desiredPoseCallback(const geometry_msgs::Po
                                     msg->pose.orientation.z,
                                     msg->pose.orientation.w;
 
-  // // normalize to unit quaternion
-  // orientation_d_target_.normalize();
-
   // enforce hemisphere continuity
   if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
       orientation_d_target_.coeffs() = -orientation_d_target_.coeffs();
   }
+
+  // normalize to unit quaternion
+  orientation_d_target_.normalize();
 
   // position_d_ = position_d_target_;
   // orientation_d_ = orientation_d_target_;

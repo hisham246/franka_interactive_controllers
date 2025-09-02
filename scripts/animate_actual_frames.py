@@ -8,10 +8,10 @@ def load_robot_data(csv_file):
     """Load actual EE trajectory data from CSV file."""
     df = pd.read_csv(csv_file)
 
-    positions = df[['filt_ee_x', 'filt_ee_y', 'filt_ee_z']].values
-    rotations = df[['filt_ee_rx', 'filt_ee_ry', 'filt_ee_rz']].values
-    # positions = df[['ee_pos_0', 'ee_pos_1', 'ee_pos_2']].values
-    # rotations = df[['ee_rot_0', 'ee_rot_1', 'ee_rot_2']].values
+    # positions = df[['filt_ee_x', 'filt_ee_y', 'filt_ee_z']].values
+    # rotations = df[['filt_ee_rx', 'filt_ee_ry', 'filt_ee_rz']].values
+    positions = df[['ee_pos_0', 'ee_pos_1', 'ee_pos_2']].values
+    rotations = df[['ee_rot_0', 'ee_rot_1', 'ee_rot_2']].values
     timestamps = df['timestamp'].values
 
     # normalize timestamps to start from 0
@@ -35,7 +35,7 @@ def plot_positions_and_rotations(csv_file, skip=1, start=0):
     """Plot actual EE positions (x,y,z) and rotations (rx,ry,rz) vs time."""
     positions, rotations, timestamps = load_robot_data(csv_file)
 
-    positions, rotations, timestamps = positions[10000:], rotations[10000:], timestamps[10000:]
+    # positions, rotations, timestamps = positions[10000:], rotations[10000:], timestamps[10000:]
 
 
     # cut start if needed
@@ -79,7 +79,7 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
     positions, rotations, timestamps = load_robot_data(csv_file)
 
     # Cut beginning if needed
-    positions, rotations, timestamps = positions[25000:], rotations[25000:], timestamps[25000:]
+    # positions, rotations, timestamps = positions[15000:], rotations[15000:], timestamps[15000:]
 
     # Skip frames for speed
     positions, rotations, timestamps = positions[::skip], rotations[::skip], timestamps[::skip]
@@ -136,6 +136,6 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
     plt.show()
 
 # Example usage:
-csv_file = "/home/hisham246/uwaterloo/surface_wiping_unet/franka_data_20250901_211900.csv"
+csv_file = "/home/hisham246/uwaterloo/surface_wiping_unet/policy_actions_20250902_135424.csv"
 plot_positions_and_rotations(csv_file, skip=1, start=0)
 animate_robot_frame(csv_file, save_animation=False)
