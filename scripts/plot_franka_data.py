@@ -27,7 +27,7 @@ def plot_ee_poses(df, save_path=None, show_plot=True):
     positions = ['x', 'y', 'z']
     for i, pos in enumerate(positions):
         ax = axes[i, 0]
-        ax.plot(time, df[f'des_ee_{pos}'], 'b-', label=f'Desired {pos.upper()}', linewidth=2)
+        ax.plot(time, df[f'filt_ee_{pos}'], 'b-', label=f'Desired {pos.upper()}', linewidth=2)
         ax.plot(time, df[f'act_ee_{pos}'], 'r--', label=f'Actual {pos.upper()}', linewidth=2)
         ax.set_title(f'EE Position {pos.upper()}')
         ax.set_xlabel('Time (s)')
@@ -39,7 +39,7 @@ def plot_ee_poses(df, save_path=None, show_plot=True):
     rotations = ['rx', 'ry', 'rz']
     for i, rot in enumerate(rotations):
         ax = axes[i, 1]
-        ax.plot(time, df[f'des_ee_{rot}'], 'b-', label=f'Desired {rot.upper()}', linewidth=2)
+        ax.plot(time, df[f'filt_ee_{rot}'], 'b-', label=f'Desired {rot.upper()}', linewidth=2)
         ax.plot(time, df[f'act_ee_{rot}'], 'r--', label=f'Actual {rot.upper()}', linewidth=2)
         ax.set_title(f'EE Rotation {rot.upper()}')
         ax.set_xlabel('Time (s)')

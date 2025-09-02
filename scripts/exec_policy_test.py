@@ -339,7 +339,7 @@ def main():
                                 action_timestamps = []
 
                                 current_time = time.time()
-                                execution_buffer = 0.2
+                                execution_buffer = 0.1
 
                                 for i in range(steps_per_inference):
                                     t_target = iter_idx + i
@@ -398,7 +398,7 @@ def main():
                             else:
                                 # Standard execution without temporal ensembling
                                 current_time = time.time()
-                                execution_buffer = 0.2
+                                execution_buffer = 0.0
                                 this_target_poses = action[:steps_per_inference]
                                 action_timestamps = [current_time + execution_buffer + dt * i for i in range(len(this_target_poses))]
 
