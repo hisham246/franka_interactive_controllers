@@ -106,7 +106,7 @@ def main():
     gripper_port = 4242
     match_dataset = None
     match_camera = 0
-    steps_per_inference = 1
+    steps_per_inference = 8
     vis_camera_idx = 0
     max_duration = 120
     frequency = 10
@@ -115,7 +115,6 @@ def main():
     camera_intrinsics = None
     mirror_crop = False
     mirror_swap = False
-    temporal_ensembling = True
             
     # Diffusion Transformer
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
@@ -284,10 +283,6 @@ def main():
                     t_start = time.monotonic() + start_delay
                     env.start_episode(eval_t_start)
 
-                    if temporal_ensembling:
-                        max_steps = int(max_duration * frequency) + steps_per_inference
-                        temporal_action_buffer = [None] * max_steps
-
                     # wait for 1/30 sec to get the closest frame actually
                     # reduces overall latency
                     frame_latency = 1/60
@@ -323,164 +318,25 @@ def main():
                             result = policy.predict_action(obs_dict)
                             raw_action = result['action_pred'][0].detach().to('cpu').numpy()
                             action = get_real_umi_action(raw_action, obs, action_pose_repr)
+                            action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
+                            this_target_poses = action
 
-                            g_now = float(action[-1, 6]) if action.ndim == 2 else float(action[6])
-
-                            if temporal_ensembling:
-                                # Scatter predictions into buffers
-                                for j, a in enumerate(action):
-                                    t_abs = iter_idx + j
-                                    if 0 <= t_abs < len(temporal_action_buffer):
-                                        if temporal_action_buffer[t_abs] is None:
-                                            temporal_action_buffer[t_abs] = []
-                                        temporal_action_buffer[t_abs].append(a)
-
-                            #     # Execute sequence of smoothed actions
-                            #     this_target_poses = []
-                            #     action_timestamps = []
-
-                            #     current_time = time.time()
-                            #     execution_buffer = 0.1
-
-                            #     for i in range(steps_per_inference):
-                            #         t_target = iter_idx + i
-                            #         if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
-                            #             cached = temporal_action_buffer[t_target]  # list of [x y z rx ry rz gripper]
-                            #             m = 0.23
-                            #             n = len(cached)
-                            #             w = np.exp(-m * np.arange(n))
-                            #             w = w / w.sum()
-
-                            #             # positions: ordinary weighted mean
-                            #             Ps = np.stack([c[:3] for c in cached], axis=0)
-                            #             p_cmd = (Ps * w[:, None]).sum(axis=0)
-
-                            #             # rotations: convert rotvec->quat, geodesic mean around q_last
-                            #             quats = [R.from_rotvec(c[3:6]).as_quat() for c in cached]
-                            #             q_cmd = _weighted_mean_quats_around(q_last, quats, w)
-
-                            #         elif i < len(action):
-                            #             p_cmd = action[i][:3]
-                            #             q_cmd = R.from_rotvec(action[i][3:6]).as_quat()
-                            #         else:
-                            #             break
-
-                            #         # Hard SE(3) rate limit around last commanded pose
-                            #         p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
-
-                            #         # Update "last" for next step in this cycle
-                            #         p_last, q_last = p_safe, q_safe
-
-                            #         # Compose target pose (rotvec from the safe quaternion)
-                            #         a_exec = np.zeros_like(action[0])
-                            #         a_exec[:3] = p_safe
-                            #         a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
-                            #         # a_exec[6]   = action[i][6] if i < len(action) else 0.0  # gripper unchanged if missing
-                            #         a_exec[6] = g_now
-
-                            #         this_target_poses.append(a_exec)
-                            #         action_timestamps.append(current_time + execution_buffer + dt * i)
-                            #         # action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
-                            #         # action_timestamps.append(obs_timestamps[-1] + execution_buffer + dt * i)
-
-
-                            #     # safety fallback
-                            #     if not this_target_poses:
-                            #         # just rate-limit the first raw action
-                            #         p_cmd = action[0][:3]
-                            #         q_cmd = R.from_rotvec(action[0][3:6]).as_quat()
-                            #         p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
-                            #         p_last, q_last = p_safe, q_safe
-                            #         a_exec = action[0].copy()
-                            #         a_exec[:3] = p_safe
-                            #         a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
-                            #         a_exec[6] = g_now
-
-                            #         this_target_poses = [a_exec]
-                            #         action_timestamps = [current_time + execution_buffer]
-                            #         # action_timestamps = [obs_timestamps[-1] + execution_buffer]
-
-                            # else:
-                            #     # Standard execution without temporal ensembling
-                            #     current_time = time.time()
-                            #     execution_buffer = 0.1
-                            #     this_target_poses = action[:steps_per_inference]
-                            #     action_timestamps = [current_time + execution_buffer + dt * i for i in range(len(this_target_poses))]
-                            #     # action_timestamps = [obs_timestamps[-1] + execution_buffer + dt * i for i in range(len(this_target_poses))]
-
-                            # Execute sequence of smoothed actions (one step per loop when ensembling)
-                            this_target_poses = []
-                            # we'll fill action_timestamps AFTER we know how many poses we kept
-
-                            # estimate inference latency to align schedule to the *sensor* clock
-                            inference_latency = time.time() - s
-                            execution_buffer = 0.10
-                            schedule_offset = inference_latency + execution_buffer
-
-                            # we normally execute only 1 step per loop when ensembling
-                            for i in range(steps_per_inference):      # usually 1
-                                t_target = iter_idx + i
-                                if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
-                                    cached = temporal_action_buffer[t_target]  # list of [x y z rx ry rz g]
-                                    m = 0.23
-                                    n = len(cached)
-
-                                    # IMPORTANT: weight the *newest* predictions highest
-                                    # cached is [oldest, ..., newest], so reverse the index in the exponent
-                                    idx = np.arange(n)
-                                    w = np.exp(-m * (n - 1 - idx))
-                                    w = w / w.sum()
-
-                                    # positions: weighted mean
-                                    Ps = np.stack([c[:3] for c in cached], axis=0)
-                                    p_cmd = (Ps * w[:, None]).sum(axis=0)
-
-                                    # rotations: convert rotvec->quat, geodesic mean around last commanded q
-                                    quats = [R.from_rotvec(c[3:6]).as_quat() for c in cached]
-                                    q_cmd = _weighted_mean_quats_around(q_last, quats, w)
-
-                                elif i < len(action):
-                                    p_cmd = action[i][:3]
-                                    q_cmd = R.from_rotvec(action[i][3:6]).as_quat()
-                                else:
-                                    break
-
-                                # SE(3) rate limit around last command
-                                p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
-                                p_last, q_last = p_safe, q_safe
-
-                                a_exec = np.zeros_like(action[0])
-                                a_exec[:3]  = p_safe
-                                a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
-                                a_exec[6]   = g_now   # keep gripper smooth across blends
-
-                                this_target_poses.append(a_exec)
-
-                            # ---- schedule from sensor clock and drop late actions ----
-                            if len(this_target_poses) > 0:
-                                obs_ts = float(obs_timestamps[-1])
-                                action_timestamps = obs_ts + schedule_offset + dt * np.arange(len(this_target_poses), dtype=np.float64)
-
-                                # late-action filter (keep only actions sufficiently in the future)
-                                action_exec_latency = 0.01
-                                curr_time = time.time()
-                                is_new = action_timestamps > (curr_time + action_exec_latency)
-                                print("Is new:", is_new)
-
-                                if not np.any(is_new):
-                                    # exceeded time budget, still execute *something* (last pose) at next grid time
-                                    this_target_poses = np.asarray(this_target_poses)[[-1]]
-                                    next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
-                                    action_timestamps = np.array([eval_t_start + next_step_idx * dt], dtype=np.float64)
-                                else:
-                                    this_target_poses = np.asarray(this_target_poses)[is_new]
-                                    action_timestamps = action_timestamps[is_new]
+                            action_exec_latency = 0.01
+                            curr_time = time.time()
+                            is_new = action_timestamps > (curr_time + action_exec_latency)
+                            print("Is new:", is_new)
+                            if np.sum(is_new) == 0:
+                                # exceeded time budget, still do something
+                                this_target_poses = this_target_poses[[-1]]
+                                # schedule on next available step
+                                next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
+                                action_timestamp = eval_t_start + (next_step_idx) * dt
+                                print('Over budget', action_timestamp - curr_time)
+                                action_timestamps = np.array([action_timestamp])
                             else:
-                                # empty safety fallback (should rarely happen)
-                                this_target_poses = np.asarray([])
-                                action_timestamps = np.asarray([])
+                                this_target_poses = this_target_poses[is_new]
+                                action_timestamps = action_timestamps[is_new]
 
-                            # print('Inference latency:', time.time() - s)
                             for a, t in zip(this_target_poses, action_timestamps):
                                 a = a.tolist()
                                 action_log.append({
@@ -493,14 +349,54 @@ def main():
                                     'ee_rot_2': a[5]
                                 })
 
-                            # print("Action:", this_target_poses)
 
-                            # execute one step
+                            # execute actions
                             env.exec_actions(
-                                actions=np.stack(this_target_poses),
-                                timestamps=np.array(action_timestamps),
+                                actions=this_target_poses,
+                                timestamps=action_timestamps,
                                 compensate_latency=True
                             )
+                            print(f"Submitted {len(this_target_poses)} steps of actions.")
+
+                            # # Build rate-limited poses in SE(3) (position + quaternion with slerp cap).
+                            # # p_last/q_last should be kept outside the loop (you already init them once before the episode).
+                            # this_target_poses = []
+                            # # action_timestamps = (np.arange(min(steps_per_inference, len(action)), dtype=np.float64)) * dt + obs_timestamps[-1]
+
+                            # for i in range(len(action)):
+                            #     # desired command from model
+                            #     p_cmd = action[i][:3]
+                            #     q_cmd = R.from_rotvec(action[i][3:6]).as_quat()  # (x,y,z,w)
+
+                            #     # rate-limit around last commanded pose (handles hemisphere continuity internally)
+                            #     p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
+
+                            #     # update "last" for next step
+                            #     p_last, q_last = p_safe, q_safe
+
+                            #     # compose executable action: rotvec back from the safe quaternion
+                            #     a_exec = np.zeros_like(action[0])
+                            #     a_exec[:3]  = p_safe
+                            #     a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
+                            #     a_exec[6]   = action[i][6]   # keep per-step gripper intent
+
+                            #     this_target_poses.append(a_exec)
+
+                            # this_target_poses = np.stack(this_target_poses, axis=0)
+
+                            # print('Inference latency:', time.time() - s)
+
+                            # # Final execution
+                            # if len(this_target_poses) > 0:
+                            #     env.exec_actions(
+                            #         actions=np.stack(this_target_poses),
+                            #         timestamps=np.array(action_timestamps),
+                            #         compensate_latency=True
+                            #     )
+                            #     print(f"Submitted {len(this_target_poses)} steps of actions.")
+                            # else:
+                            #     print("No valid actions to submit.")
+
 
                         # _ = cv2.pollKey()
                         press_events = key_counter.get_press_events()
