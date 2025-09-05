@@ -17,6 +17,8 @@ from omegaconf import OmegaConf
 import json
 import pandas as pd
 from datetime import datetime
+from collections import deque
+import cvxpy as cp
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR))
@@ -40,8 +42,143 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
+# LiPo
+class ActionLiPo:
+    def __init__(self, solver="CLARABEL", 
+                 chunk_size=100, 
+                 blending_horizon=10, 
+                 action_dim=7, 
+                 len_time_delay=0,
+                 dt=0.0333,
+                 epsilon_blending=0.02,
+                 epsilon_path=0.003):
+        """
+        ActionLiPo (Action Lightweight Post-Optimizer) for action optimization.      
+        Parameters:
+        - solver: The solver to use for the optimization problem.
+        - chunk_size: The size of the action chunk to optimize.
+        - blending_horizon: The number of actions to blend with past actions.
+        - action_dim: The dimension of the action space.
+        - len_time_delay: The length of the time delay for the optimization.
+        - dt: Time step for the optimization.
+        - epsilon_blending: Epsilon value for blending actions.
+        - epsilon_path: Epsilon value for path actions.
+        """
 
-# ---- quat utilities ----
+        self.solver = solver
+        self.N = chunk_size
+        self.B = blending_horizon
+        self.D = action_dim
+        self.TD = len_time_delay
+
+        self.dt = dt
+        self.epsilon_blending = epsilon_blending
+        self.epsilon_path = epsilon_path
+        
+        JM = 3  # margin for jerk calculation
+        self.JM = JM
+        self.epsilon = cp.Variable((self.N+JM, self.D)) # previous + 3 to consider previous vel/acc/jrk
+        self.ref = cp.Parameter((self.N+JM, self.D),value=np.zeros((self.N+JM, self.D))) # previous + 3
+        
+        D_j = np.zeros((self.N+JM, self.N+JM))
+        for i in range(self.N - 2):
+            D_j[i, i]     = -1
+            D_j[i, i+1]   = 3
+            D_j[i, i+2]   = -3
+            D_j[i, i+3]   = 1
+        D_j = D_j / self.dt**3
+
+        q_total = self.epsilon + self.ref  # (N, D)
+        cost = cp.sum([cp.sum_squares(D_j @ q_total[:, d]) for d in range(self.D)])
+
+        constraints = []
+
+        constraints += [self.epsilon[self.B+JM:] <= self.epsilon_path]
+        constraints += [self.epsilon[self.B+JM:] >= - self.epsilon_path]
+        constraints += [self.epsilon[JM+1+self.TD:self.B+JM] <= self.epsilon_blending]
+        constraints += [self.epsilon[JM+1+self.TD:self.B+JM] >= - self.epsilon_blending]
+        constraints += [self.epsilon[0:JM+1+self.TD] == 0.0]
+
+        np.set_printoptions(precision=3, suppress=True, linewidth=100)
+
+        self.p = cp.Problem(cp.Minimize(cost), constraints)
+
+        # Initialize the problem & warm up
+        self.p.solve(warm_start=True, verbose=False, solver=self.solver, time_limit=0.05)
+        
+        self.log = []
+
+    def solve(self, actions: np.ndarray, past_actions: np.ndarray, len_past_actions: int):
+        """
+        Solve the optimization problem with the given actions and past actions.
+        Parameters:
+        - actions: The current actions to optimize.
+        - past_actions: The past actions to blend with.
+        - len_past_actions: The number of past actions to consider for blending.
+        Returns:
+        - solved: The optimized actions after solving the problem.
+        - ref: The reference actions used in the optimization.
+        """
+
+        blend_len = len_past_actions
+        JM = self.JM
+        self.ref.value[JM:] = actions.copy()
+        
+        if blend_len > 0:
+            # update last actions
+            self.ref.value[:JM+self.TD] = past_actions[-blend_len-JM:-blend_len + self.TD].copy()
+            ratio_space = np.linspace(0, 1, blend_len-self.TD) # (B,1)    
+            self.ref.value[JM+self.TD:blend_len+JM] = ratio_space[:, None] * actions[self.TD:blend_len] + (1 - ratio_space[:, None]) * past_actions[-blend_len+self.TD:]
+        else: # blend_len == 0
+            # update last actions
+            self.ref.value[:JM] = actions[0]
+            
+        t0 = time.time()
+        try:
+            self.p.solve(warm_start=True, verbose=False, solver=self.solver, time_limit=0.05)
+        except Exception as e:
+            return None, e
+        t1 = time.time()
+
+        solved_time = t1 - t0
+        self.solved = self.epsilon.value.copy() + self.ref.value.copy()
+
+        self.log.append({
+            "time": solved_time,
+            "epsilon": self.epsilon.value.copy(),
+            "ref": self.ref.value.copy(),
+            "solved": self.solved.copy()
+        })
+
+        return self.solved[JM:].copy(), self.ref.value[JM:].copy()
+
+    def get_log(self):
+        return self.log
+
+    def reset_log(self):
+        self.log = []
+
+    def print_solved_times(self):
+        if self.log:
+            avg_time = np.mean([entry["time"] for entry in self.log])
+            std_time = np.std([entry["time"] for entry in self.log])
+            num_logs = len(self.log)
+            print(f"Number of logs: {num_logs}")
+            print(f"Average solved time: {avg_time:.4f} seconds, Std: {std_time:.4f} seconds")
+        else:
+            print("No logs available.")
+
+def split_pose_gripper(actions7):
+    # actions7: [..., 7] = [x,y,z,rx,ry,rz, g]
+    return actions7[:, :6].copy(), actions7[:, 6:7].copy()
+
+def merge_pose_gripper(pose6, grip1):
+    return np.concatenate([pose6, grip1], axis=-1)
+
+def make_timestamps(start_from, n, dt):
+    return (np.arange(n, dtype=np.float64) * dt) + start_from
+
+# quat utilities
 def _q_norm(q): return q / (np.linalg.norm(q) + 1e-12)
 def _q_conj(q): return np.array([-q[0], -q[1], -q[2], q[3]])
 def _q_mul(a,b):
@@ -52,6 +189,7 @@ def _q_mul(a,b):
         w1*z2 + x1*y2 - y1*x2 + z1*w2,
         w1*w2 - x1*x2 - y1*y2 - z1*z2
     ])
+
 def _slerp(q0,q1,t):
     q0=_q_norm(q0); q1=_q_norm(q1)
     if np.dot(q0,q1) < 0: q1 = -q1
@@ -106,7 +244,7 @@ def main():
     gripper_port = 4242
     match_dataset = None
     match_camera = 0
-    steps_per_inference = 1
+    steps_per_inference = 8
     vis_camera_idx = 0
     max_duration = 120
     frequency = 10
@@ -115,15 +253,13 @@ def main():
     camera_intrinsics = None
     mirror_crop = False
     mirror_swap = False
-    temporal_ensembling = True
-    ENSEMBLE_MAX_CANDS = 6   # keep at most the latest 6 candidates per target tick
             
     # Diffusion Transformer
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
 
 
     # Compliance policy unet
@@ -239,6 +375,32 @@ def main():
             device = torch.device('cuda')
             policy.eval().to(device)
 
+            # LiPo knobs
+            H  = steps_per_inference         # horizon length predicted each call
+            B  = 3                           # overlap (in steps) to blend/optimize (try 3–4 @10 Hz)
+            EPS_B = 0.02                     # blend-zone bound (rad or m), tune
+            EPS_P = 0.003                    # path bound (tighter), tune
+            DT    = 1.0 / frequency
+
+            # LiPo instance (optimize 6D pose; gripper passes through)
+            lipo = ActionLiPo(
+                solver="CLARABEL",
+                chunk_size=H,
+                blending_horizon=B,
+                action_dim=6,
+                len_time_delay=0,            # will be set per-solve with measured TD
+                dt=DT,
+                epsilon_blending=EPS_B,
+                epsilon_path=EPS_P
+            )
+
+            # Rolling plan of future actions (pose+time) that we’ve already optimized
+            planned_actions   = deque()   # each item: (7D action, timestamp)
+            last_optimized6   = None      # numpy [N,6] of last smoothed chunk (for LiPo "past")
+            last_opt_tail6    = None      # tail we keep for blending
+            last_tail_len     = 0         # how many past steps we offer for blending
+            JM = lipo.JM                  # LiPo’s jerk-margin (3)
+
             obs = env.get_obs()
             # print("Observation", obs)           
             episode_start_pose = np.concatenate([
@@ -285,10 +447,6 @@ def main():
                     t_start = time.monotonic() + start_delay
                     env.start_episode(eval_t_start)
 
-                    if temporal_ensembling:
-                        max_steps = int(max_duration * frequency) + steps_per_inference
-                        temporal_action_buffer = [None] * max_steps
-
                     # wait for 1/30 sec to get the closest frame actually
                     # reduces overall latency
                     frame_latency = 1/60
@@ -300,9 +458,8 @@ def main():
                     action_log = []
                     while True:
                         # calculate timing
-                        t_cycle_end = t_start + (iter_idx + steps_per_inference) * dt
-
-                        # get obs
+                        effective_stride = H - B
+                        t_cycle_end = t_start + (iter_idx + effective_stride) * dt # get obs
                         obs = env.get_obs()
                         # print("Camera:", obs['camera0_rgb'].shape)
                         episode_start_pose = np.concatenate([
@@ -321,177 +478,72 @@ def main():
                                 episode_start_pose=episode_start_pose)
                             obs_dict = dict_apply(obs_dict_np, 
                                 lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                            
                             result = policy.predict_action(obs_dict)
                             raw_action = result['action_pred'][0].detach().to('cpu').numpy()
-                            action = get_real_umi_action(raw_action, obs, action_pose_repr)
+                            action7 = get_real_umi_action(raw_action, obs, action_pose_repr)  # (H,7)
+                            del result
 
-                            g_now = float(action[-1, 6]) if action.ndim == 2 else float(action[6])
+                            # Timestamps for this raw chunk
+                            action_timestamps = make_timestamps(obs_timestamps[-1], len(action7), DT)
 
-                            if temporal_ensembling:
-                                # Scatter predictions into buffers
-                                made_idx = iter_idx
-                                for j, a in enumerate(action):
-                                    t_abs = iter_idx + j
-                                    if 0 <= t_abs < len(temporal_action_buffer):
-                                        if temporal_action_buffer[t_abs] is None:
-                                            temporal_action_buffer[t_abs] = []
-                                        # store (action, made_idx)
-                                        temporal_action_buffer[t_abs].append((a, made_idx))
+                            # Measure effective delay (inference + exec) -> steps
+                            policy_time = time.time() - s
+                            action_exec_latency = 0.01
+                            effective_delay_sec = policy_time + action_exec_latency
+                            TD = int(np.clip(np.round(effective_delay_sec / DT), 0, H-1))
 
-                            #     # Execute sequence of smoothed actions
-                            #     this_target_poses = []
-                            #     action_timestamps = []
+                            # Prepare LiPo inputs (pose only)
+                            pose6, grip1 = split_pose_gripper(action7)
 
-                            #     current_time = time.time()
-                            #     execution_buffer = 0.1
-
-                            #     for i in range(steps_per_inference):
-                            #         t_target = iter_idx + i
-                            #         if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
-                            #             cached = temporal_action_buffer[t_target]  # list of [x y z rx ry rz gripper]
-                            #             m = 0.23
-                            #             n = len(cached)
-                            #             w = np.exp(-m * np.arange(n))
-                            #             w = w / w.sum()
-
-                            #             # positions: ordinary weighted mean
-                            #             Ps = np.stack([c[:3] for c in cached], axis=0)
-                            #             p_cmd = (Ps * w[:, None]).sum(axis=0)
-
-                            #             # rotations: convert rotvec->quat, geodesic mean around q_last
-                            #             quats = [R.from_rotvec(c[3:6]).as_quat() for c in cached]
-                            #             q_cmd = _weighted_mean_quats_around(q_last, quats, w)
-
-                            #         elif i < len(action):
-                            #             p_cmd = action[i][:3]
-                            #             q_cmd = R.from_rotvec(action[i][3:6]).as_quat()
-                            #         else:
-                            #             break
-
-                            #         # Hard SE(3) rate limit around last commanded pose
-                            #         p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
-
-                            #         # Update "last" for next step in this cycle
-                            #         p_last, q_last = p_safe, q_safe
-
-                            #         # Compose target pose (rotvec from the safe quaternion)
-                            #         a_exec = np.zeros_like(action[0])
-                            #         a_exec[:3] = p_safe
-                            #         a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
-                            #         # a_exec[6]   = action[i][6] if i < len(action) else 0.0  # gripper unchanged if missing
-                            #         a_exec[6] = g_now
-
-                            #         this_target_poses.append(a_exec)
-                            #         action_timestamps.append(current_time + execution_buffer + dt * i)
-                            #         # action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
-                            #         # action_timestamps.append(obs_timestamps[-1] + execution_buffer + dt * i)
-
-
-                            #     # safety fallback
-                            #     if not this_target_poses:
-                            #         # just rate-limit the first raw action
-                            #         p_cmd = action[0][:3]
-                            #         q_cmd = R.from_rotvec(action[0][3:6]).as_quat()
-                            #         p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
-                            #         p_last, q_last = p_safe, q_safe
-                            #         a_exec = action[0].copy()
-                            #         a_exec[:3] = p_safe
-                            #         a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
-                            #         a_exec[6] = g_now
-
-                            #         this_target_poses = [a_exec]
-                            #         action_timestamps = [current_time + execution_buffer]
-                            #         # action_timestamps = [obs_timestamps[-1] + execution_buffer]
-
-                            # else:
-                            #     # Standard execution without temporal ensembling
-                            #     current_time = time.time()
-                            #     execution_buffer = 0.1
-                            #     this_target_poses = action[:steps_per_inference]
-                            #     action_timestamps = [current_time + execution_buffer + dt * i for i in range(len(this_target_poses))]
-                            #     # action_timestamps = [obs_timestamps[-1] + execution_buffer + dt * i for i in range(len(this_target_poses))]
-
-                            # Execute sequence of smoothed actions (one step per loop when ensembling)
-                            this_target_poses = []
-                            # we'll fill action_timestamps after we know how many poses we kept
-
-                            # Estimate inference latency to align schedule to the sensor clock
-                            inference_latency = time.time() - s
-                            execution_buffer = 0.10
-                            schedule_offset = inference_latency + execution_buffer
-
-                            # We normally execute only 1 step per loop when ensembling
-                            for i in range(steps_per_inference):      # usually 1
-                                t_target = iter_idx + i
-                                if 0 <= t_target < len(temporal_action_buffer) and temporal_action_buffer[t_target]:
-                                    cached_pairs = temporal_action_buffer[t_target]  # list of (action, made_idx)
-
-                                    # Keep only the newest ENSEMBLE_MAX_CANDS by made_idx (recency)
-                                    # cached_pairs may already be roughly ordered, but we sort to be safe.
-                                    cached_pairs = sorted(cached_pairs, key=lambda x: x[1])[-ENSEMBLE_MAX_CANDS:]
-
-                                    acts = [p[0] for p in cached_pairs]          # actions as arrays [x y z rx ry rz g]
-                                    made = np.array([p[1] for p in cached_pairs])  # their generation iter_idx
-
-                                    # Ages in ticks relative to the newest one: newest age = 0
-                                    ages = (made.max() - made).astype(np.float64)
-
-                                    # Exponential weights by age (newest gets the largest weight)
-                                    m = 0.23
-                                    w = np.exp(-m * ages)
-                                    w = w / w.sum()
-
-                                    # Positions: weighted mean
-                                    Ps = np.stack([a[:3] for a in acts], axis=0)
-                                    p_cmd = (Ps * w[:, None]).sum(axis=0)
-
-                                    # Rotations: geodesic mean around q_last
-                                    quats = [R.from_rotvec(a[3:6]).as_quat() for a in acts]
-                                    q_cmd = _weighted_mean_quats_around(q_last, quats, w)
-
-                                elif i < len(action):
-                                    # Fallback if no cache yet for this t_target
-                                    p_cmd = action[i][:3]
-                                    q_cmd = R.from_rotvec(action[i][3:6]).as_quat()
-                                else:
-                                    break
-
-                                # SE(3) rate limit around last command
-                                p_safe, q_safe = _limit_se3_step(p_last, q_last, p_cmd, q_cmd, v_max, w_max, dt)
-                                p_last, q_last = p_safe, q_safe
-
-                                a_exec = np.zeros_like(action[0])
-                                a_exec[:3]  = p_safe
-                                a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
-                                a_exec[6]   = g_now   # keep gripper smooth across blends
-
-                                this_target_poses.append(a_exec)
-
-                            # Schedule from sensor clock and drop late actions
-                            if len(this_target_poses) > 0:
-                                obs_ts = float(obs_timestamps[-1])
-                                action_timestamps = obs_ts + schedule_offset + dt * np.arange(len(this_target_poses), dtype=np.float64)
-
-                                # late-action filter (keep only actions sufficiently in the future)
-                                action_exec_latency = 0.01
-                                curr_time = time.time()
-                                is_new = action_timestamps > (curr_time + action_exec_latency)
-                                print("Is new:", is_new)
-
-                                if not np.any(is_new):
-                                    # exceeded time budget, still execute *something* (last pose) at next grid time
-                                    this_target_poses = np.asarray(this_target_poses)[[-1]]
-                                    next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
-                                    action_timestamps = np.array([eval_t_start + next_step_idx * dt], dtype=np.float64)
-                                else:
-                                    this_target_poses = np.asarray(this_target_poses)[is_new]
-                                    action_timestamps = action_timestamps[is_new]
+                            # Decide how much past to blend with (tail from last optimized chunk)
+                            # Keep at most B steps; also ensure we provide the JM+TD context rows
+                            if last_opt_tail6 is None:
+                                blend_len = 0
+                                past_for_lipo = np.zeros((JM + TD, 6), dtype=np.float64)  # dummy; will be overwritten inside solver
                             else:
-                                # empty safety fallback (should rarely happen)
-                                this_target_poses = np.asarray([])
-                                action_timestamps = np.asarray([])
+                                # we want [JM + blend_len] rows available for LiPo:
+                                tail = last_opt_tail6
+                                blend_len = min(B, tail.shape[0])
+                                past_for_lipo = np.vstack([
+                                    # give LiPo its JM context (last 3 samples preceding blending window)
+                                    tail[max(0, tail.shape[0] - (blend_len + JM)) : max(0, tail.shape[0] - blend_len), :],
+                                    # then the blend window that overlaps with the new chunk
+                                    tail[-blend_len:, :]
+                                ])
+                                # If tail was shorter than JM+blend_len, LiPo still has internal zeros; it’s ok over short horizons.
 
-                            # print('Inference latency:', time.time() - s)
+                            # Configure LiPo’s per-call delay in steps
+                            lipo.TD = TD
+
+                            # Solve LiPo (returns (N,6) smoothed and reference used)
+                            smoothed6, _ref6 = lipo.solve(actions=pose6, past_actions=past_for_lipo, len_past_actions=blend_len)
+                            if smoothed6 is None:
+                                # Fallback on raw in case the solver timed out
+                                smoothed6 = pose6.copy()
+
+                            # Re-attach gripper (not optimized)
+                            smoothed7 = merge_pose_gripper(smoothed6, grip1)
+
+                            # Keep a new tail for the next overlap: last B samples of the smoothed chunk
+                            last_opt_tail6 = smoothed6[-B:].copy()
+                            last_tail_len  = last_opt_tail6.shape[0]
+
+                            action_exec_latency = 0.01
+                            curr_time = time.time()
+                            send_t0 = curr_time + action_exec_latency
+                            is_new = action_timestamps > send_t0                            
+
+                            print("Is new:", is_new)
+                            if np.sum(is_new) == 0:
+                                # budget overrun: send 1 step in the nearest slot
+                                this_target_poses = smoothed7[[-1]]
+                                next_step_idx = int(np.ceil((curr_time - eval_t_start) / DT))
+                                action_timestamps = np.array([eval_t_start + next_step_idx * DT], dtype=np.float64)
+                            else:
+                                this_target_poses = smoothed7[is_new]
+                                action_timestamps = action_timestamps[is_new]
+
                             for a, t in zip(this_target_poses, action_timestamps):
                                 a = a.tolist()
                                 action_log.append({
@@ -504,14 +556,13 @@ def main():
                                     'ee_rot_2': a[5]
                                 })
 
-                            # print("Action:", this_target_poses)
-
-                            # execute one step
+                            # execute actions
                             env.exec_actions(
-                                actions=np.stack(this_target_poses),
-                                timestamps=np.array(action_timestamps),
+                                actions=this_target_poses,
+                                timestamps=action_timestamps,
                                 compensate_latency=True
                             )
+                            print(f"Submitted {len(this_target_poses)} steps of actions.")
 
                         press_events = key_counter.get_press_events()
                         stop_episode = False
@@ -532,7 +583,7 @@ def main():
 
                         # wait for execution
                         precise_wait(t_cycle_end - frame_latency)
-                        iter_idx += steps_per_inference
+                        iter_idx += effective_stride
 
                 except KeyboardInterrupt:
                     print("Interrupted!")
