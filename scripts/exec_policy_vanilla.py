@@ -101,12 +101,12 @@ def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
 
 
 def main():
-    output = '/home/hisham246/uwaterloo/pickplace_test_unet'
+    output = '/home/hisham246/uwaterloo/surface_wiping_unet'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
     match_camera = 0
-    steps_per_inference = 8
+    steps_per_inference = 12
     vis_camera_idx = 0
     max_duration = 120
     frequency = 10
@@ -120,8 +120,8 @@ def main():
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
 
     # Diffusion UNet
-    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
 
 
     # Compliance policy unet
@@ -324,7 +324,7 @@ def main():
                             action_exec_latency = 0.01
                             curr_time = time.time()
                             is_new = action_timestamps > (curr_time + action_exec_latency)
-                            print("Is new:", is_new)
+                            # print("Is new:", is_new)
                             if np.sum(is_new) == 0:
                                 # exceeded time budget, still do something
                                 this_target_poses = this_target_poses[[-1]]
@@ -349,7 +349,6 @@ def main():
                                     'ee_rot_2': a[5]
                                 })
 
-
                             # execute actions
                             env.exec_actions(
                                 actions=this_target_poses,
@@ -357,7 +356,6 @@ def main():
                                 compensate_latency=True
                             )
                             print(f"Submitted {len(this_target_poses)} steps of actions.")
-
 
                         # _ = cv2.pollKey()
                         press_events = key_counter.get_press_events()

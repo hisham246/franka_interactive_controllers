@@ -44,6 +44,7 @@ def plot_positions_and_rotations(csv_file, skip=1, start=0):
     # stride if needed
     positions, rotations, timestamps = positions[::skip], rotations[::skip], timestamps[::skip]
     timestamps = timestamps - timestamps[0]
+    print("Total time: ", timestamps[-1] - timestamps[0], "s")
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     
@@ -136,6 +137,6 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
     plt.show()
 
 # Example usage:
-csv_file = "/home/hisham246/uwaterloo/pickplace_test_unet/policy_actions_20250907_214910.csv"
+csv_file = "/home/hisham246/uwaterloo/surface_wiping_test/policy_actions_20250908_180104.csv"
 plot_positions_and_rotations(csv_file, skip=1, start=0)
 animate_robot_frame(csv_file, save_animation=False)
