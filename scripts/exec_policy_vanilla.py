@@ -358,6 +358,45 @@ def main():
                             )
                             print(f"Submitted {len(this_target_poses)} steps of actions.")
 
+
+                        # _ = cv2.pollKey()
+                        press_events = key_counter.get_press_events()
+                        stop_episode = False
+                        for key_stroke in press_events:
+                            if key_stroke == KeyCode(char='s'):
+                                # Stop episode
+                                # Hand control back to human
+                                print('Stopped.')
+                                stop_episode = True
+
+                        t_since_start = time.time() - eval_t_start
+                        if t_since_start > max_duration:
+                            print("Max Duration reached.")
+                            stop_episode = True
+                        if stop_episode:
+                            env.end_episode()
+                            break
+
+                        # wait for execution
+                        precise_wait(t_cycle_end - frame_latency)
+
+                        iter_idx += steps_per_inference
+
+                except KeyboardInterrupt:
+                    print("Interrupted!")
+                    if len(action_log) > 0:
+                        df = pd.DataFrame(action_log)
+                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
+                        df.to_csv(csv_path, index=False)
+                        print(f"Saved actions to {csv_path}")
+                    # stop robot.
+                    env.end_episode()
+                    
+if __name__ == '__main__':
+    main()
+
+
                             # # Build rate-limited poses in SE(3) (position + quaternion with slerp cap).
                             # # p_last/q_last should be kept outside the loop (you already init them once before the episode).
                             # this_target_poses = []
@@ -396,41 +435,3 @@ def main():
                             #     print(f"Submitted {len(this_target_poses)} steps of actions.")
                             # else:
                             #     print("No valid actions to submit.")
-
-
-                        # _ = cv2.pollKey()
-                        press_events = key_counter.get_press_events()
-                        stop_episode = False
-                        for key_stroke in press_events:
-                            if key_stroke == KeyCode(char='s'):
-                                # Stop episode
-                                # Hand control back to human
-                                print('Stopped.')
-                                stop_episode = True
-
-                        t_since_start = time.time() - eval_t_start
-                        if t_since_start > max_duration:
-                            print("Max Duration reached.")
-                            stop_episode = True
-                        if stop_episode:
-                            env.end_episode()
-                            break
-
-                        # wait for execution
-                        precise_wait(t_cycle_end - frame_latency)
-
-                        iter_idx += steps_per_inference
-
-                except KeyboardInterrupt:
-                    print("Interrupted!")
-                    if len(action_log) > 0:
-                        df = pd.DataFrame(action_log)
-                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
-                        df.to_csv(csv_path, index=False)
-                        print(f"Saved actions to {csv_path}")
-                    # stop robot.
-                    env.end_episode()
-                    
-if __name__ == '__main__':
-    main()

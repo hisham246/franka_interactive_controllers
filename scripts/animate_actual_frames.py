@@ -136,6 +136,6 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
     plt.show()
 
 # Example usage:
-csv_file = "/home/hisham246/uwaterloo/pickplace_test_unet/policy_actions_20250904_104536.csv"
+csv_file = "/home/hisham246/uwaterloo/surface_wiping_unet/policy_actions_20250907_205356.csv"
 plot_positions_and_rotations(csv_file, skip=1, start=0)
 animate_robot_frame(csv_file, save_animation=False)
