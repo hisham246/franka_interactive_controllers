@@ -41,6 +41,27 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
+class GripperController:
+    def __init__(self, open_width=0.08, close_width=0.02, threshold=0.05):
+        self.open_width = open_width
+        self.close_width = close_width  
+        self.threshold = threshold
+        self.last_state = "open"
+        
+    def process(self, policy_width):
+        if policy_width > self.threshold:
+            current_state = "open"
+            target_width = self.open_width
+        else:
+            current_state = "closed" 
+            target_width = self.close_width
+            
+        if current_state != self.last_state:
+            print(f"Gripper: {self.last_state} -> {current_state}")
+            self.last_state = current_state
+            
+        return target_width
+
 # LiPo
 class ActionLiPo:
     def __init__(self, solver="CLARABEL", 
@@ -264,6 +285,8 @@ def main():
     lipo_time_delay = 0  # Account for inference latency (in timesteps)
     
     ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
+    # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
+
 
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
@@ -289,6 +312,8 @@ def main():
         # epsilon_path     = [0.010,0.010,0.010, 0.003,0.003,0.003, 0.0],
         # epsilon_blending  = [0.030,0.030,0.030, 0.020,0.020,0.020, 0.0]
     )
+
+    gripper_ctrl = GripperController()
 
     fisheye_converter = None
     if sim_fov is not None:
@@ -406,6 +431,7 @@ def main():
                     # start episode
                     policy.reset()
                     lipo.reset_log()  # Reset LiPo logs
+                    gripper_ctrl.last_state = "open"
                     
                     start_delay = 1.0
                     eval_t_start = time.time() + start_delay
@@ -557,16 +583,19 @@ def main():
                                 a_exec[:3] = p_safe
                                 a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
 
-                                # Optional: rate-limit gripper (index 6) if present
+                                # # Optional: rate-limit gripper (index 6) if present
+                                # if pose_i.shape[0] >= 7:
+                                #     if gripper_rate_limit is None:
+                                #         a_exec[6] = pose_i[6]
+                                #     else:
+                                #         # simple first-order clamp based on dt_eff
+                                #         g_prev = limited_poses[-1][6] if len(limited_poses) > 0 else pose_i[6]
+                                #         g_cmd = pose_i[6]
+                                #         dg = np.clip(g_cmd - g_prev, -gripper_rate_limit * dt_eff, gripper_rate_limit * dt_eff)
+                                #         a_exec[6] = g_prev + dg
+
                                 if pose_i.shape[0] >= 7:
-                                    if gripper_rate_limit is None:
-                                        a_exec[6] = pose_i[6]
-                                    else:
-                                        # simple first-order clamp based on dt_eff
-                                        g_prev = limited_poses[-1][6] if len(limited_poses) > 0 else pose_i[6]
-                                        g_cmd = pose_i[6]
-                                        dg = np.clip(g_cmd - g_prev, -gripper_rate_limit * dt_eff, gripper_rate_limit * dt_eff)
-                                        a_exec[6] = g_prev + dg
+                                    a_exec[6] = gripper_ctrl.process(pose_i[6])
 
                                 # Accumulate
                                 limited_poses.append(a_exec)
@@ -598,7 +627,7 @@ def main():
                                 timestamps=limited_timestamps,
                                 compensate_latency=True
                             )
-                            print(f"Submitted {len(limited_poses)} steps of smoothed actions.")
+                            # print(f"Submitted {len(limited_poses)} steps of smoothed actions.")
 
                         press_events = key_counter.get_press_events()
                         stop_episode = False
@@ -634,7 +663,6 @@ def main():
                     env.end_episode()
                     
 if __name__ == '__main__':
-
     main()
 
 
