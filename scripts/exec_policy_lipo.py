@@ -263,7 +263,7 @@ def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
 
 
 def main():
-    output = '/home/hisham246/uwaterloo/surface_wiping_test'
+    output = '/home/hisham246/uwaterloo/surface_wiping_test_2'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
@@ -401,8 +401,8 @@ def main():
                 ], axis=-1)[-1]
             
             # SE(3) state & limits
-            v_max = 0.75
-            w_max = 0.9
+            v_max = 1.25
+            w_max = 1.25
             p_last = obs['robot0_eef_pos'][-1].copy()
             q_last = R.from_rotvec(obs['robot0_eef_rot_axis_angle'][-1].copy()).as_quat()
 
