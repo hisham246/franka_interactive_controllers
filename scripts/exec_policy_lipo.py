@@ -41,26 +41,79 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-class GripperController:
-    def __init__(self, open_width=0.08, close_width=0.02, threshold=0.05):
-        self.open_width = open_width
-        self.close_width = close_width  
-        self.threshold = threshold
-        self.last_state = "open"
+# class GripperController:
+#     def __init__(self, open_width=0.08, close_width=0.02, threshold=0.05):
+#         self.open_width = open_width
+#         self.close_width = close_width  
+#         self.threshold = threshold
+#         self.last_state = "open"
         
-    def process(self, policy_width):
-        if policy_width > self.threshold:
-            current_state = "open"
-            target_width = self.open_width
-        else:
-            current_state = "closed" 
-            target_width = self.close_width
+#     def process(self, policy_width):
+#         if policy_width > self.threshold:
+#             current_state = "open"
+#             target_width = self.open_width
+#         else:
+#             current_state = "closed" 
+#             target_width = self.close_width
             
-        if current_state != self.last_state:
-            print(f"Gripper: {self.last_state} -> {current_state}")
-            self.last_state = current_state
+#         if current_state != self.last_state:
+#             print(f"Gripper: {self.last_state} -> {current_state}")
+#             self.last_state = current_state
             
-        return target_width
+#         return target_width
+
+class GripperController:
+    """
+    Optimal gripper controller that only sends commands when state changes,
+    with debouncing to prevent oscillation.
+    """
+    def __init__(self, 
+                 open_width=0.08, 
+                 close_width=0.02, 
+                 threshold=0.05,
+                 debounce_time=0.8):
+        
+        self.open_width = open_width
+        self.close_width = close_width
+        self.threshold = threshold
+        self.debounce_time = debounce_time
+        
+        self.current_state = "open"
+        self.last_state_change_time = 0
+        self.last_executed_width = open_width
+            
+    def process_width_command(self, policy_width, current_time):
+        """
+        Returns (width, should_send_command)
+        Only returns should_send_command=True when state actually changes
+        """
+        wants_open = policy_width > self.threshold
+        desired_state = "open" if wants_open else "closed"
+        
+        # Check if we want to change state AND enough time has passed
+        if (desired_state != self.current_state and 
+            current_time - self.last_state_change_time > self.debounce_time):
+            
+            # State change!
+            self.current_state = desired_state
+            self.last_state_change_time = current_time
+            
+            if desired_state == "open":
+                self.last_executed_width = self.open_width
+            else:
+                self.last_executed_width = self.close_width
+            
+            print(f"Gripper: -> {desired_state.upper()}")
+            return self.last_executed_width, True  # Send command
+        
+        # No state change needed
+        return self.last_executed_width, False  # Don't send command
+    
+    def reset(self):
+        """Reset controller"""
+        self.current_state = "open"
+        self.last_state_change_time = 0
+        self.last_executed_width = self.open_width
 
 # LiPo
 class ActionLiPo:
@@ -431,7 +484,8 @@ def main():
                     # start episode
                     policy.reset()
                     lipo.reset_log()  # Reset LiPo logs
-                    gripper_ctrl.last_state = "open"
+                    # gripper_ctrl.last_state = "open"
+                    gripper_ctrl.reset()
                     
                     start_delay = 1.0
                     eval_t_start = time.time() + start_delay
@@ -504,11 +558,11 @@ def main():
                                 # Use the first steps_per_inference actions from smoothed chunk
                                 action = smoothed_actions[:steps_per_inference]
                                 
-                                print(f"Applied LiPo smoothing (chunk {action_chunk_counter})")
+                                # print(f"Applied LiPo smoothing (chunk {action_chunk_counter})")
                             else:
                                 # Fallback to original actions if LiPo fails
                                 action = action_chunk[:steps_per_inference]
-                                print("LiPo failed, using original actions")
+                                # print("LiPo failed, using original actions")
                             
                             action_chunk_counter += 1
                             
@@ -583,19 +637,28 @@ def main():
                                 a_exec[:3] = p_safe
                                 a_exec[3:6] = R.from_quat(q_safe).as_rotvec()
 
-                                # # Optional: rate-limit gripper (index 6) if present
-                                # if pose_i.shape[0] >= 7:
-                                #     if gripper_rate_limit is None:
-                                #         a_exec[6] = pose_i[6]
-                                #     else:
-                                #         # simple first-order clamp based on dt_eff
-                                #         g_prev = limited_poses[-1][6] if len(limited_poses) > 0 else pose_i[6]
-                                #         g_cmd = pose_i[6]
-                                #         dg = np.clip(g_cmd - g_prev, -gripper_rate_limit * dt_eff, gripper_rate_limit * dt_eff)
-                                #         a_exec[6] = g_prev + dg
-
+                                # Optional: rate-limit gripper (index 6) if present
                                 if pose_i.shape[0] >= 7:
-                                    a_exec[6] = gripper_ctrl.process(pose_i[6])
+                                    if gripper_rate_limit is None:
+                                        a_exec[6] = pose_i[6]
+                                    else:
+                                        # simple first-order clamp based on dt_eff
+                                        g_prev = limited_poses[-1][6] if len(limited_poses) > 0 else pose_i[6]
+                                        g_cmd = pose_i[6]
+                                        dg = np.clip(g_cmd - g_prev, -gripper_rate_limit * dt_eff, gripper_rate_limit * dt_eff)
+                                        a_exec[6] = g_prev + dg
+
+                                # print("Gripper cmd:", pose_i[6])
+                                # if pose_i.shape[0] >= 7:
+                                #     target_width, should_send = gripper_ctrl.process_width_command(pose_i[6], t_i)
+                                    
+                                #     if should_send:
+                                #         # Only update gripper when state actually changes
+                                #         a_exec[6] = target_width
+                                #         # print(f"Actually sending gripper command: {target_width:.3f}")
+                                #     else:
+                                #         # Keep the previous gripper state - don't send new comman and just use last known width
+                                #         a_exec[6] = gripper_ctrl.last_executed_width
 
                                 # Accumulate
                                 limited_poses.append(a_exec)

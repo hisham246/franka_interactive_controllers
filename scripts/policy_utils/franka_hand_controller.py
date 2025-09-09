@@ -108,8 +108,8 @@ class FrankaHandController(mp.Process):
             if last_width is not None:
                 try:
                     # print(f"[FrankaHandController] Streaming width: {last_width:.3f}")
-                    # self._client.gripper_goto(last_width, self.speed, self.force)
-                    self._client.gripper_grasp(self.speed, self.force, last_width)
+                    self._client.gripper_goto(last_width, self.speed, self.force)
+                    # self._client.gripper_grasp(self.speed, self.force, last_width)
 
                 except Exception as e:
                     # print(f"[FrankaHandController] RPC error during gripper_goto: {e}")
