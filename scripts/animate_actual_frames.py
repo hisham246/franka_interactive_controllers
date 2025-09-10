@@ -130,13 +130,14 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
                          interval=interval, blit=False, repeat=True)
 
     if save_animation:
-        anim.save(filename, writer='pillow', fps=500)  # save at 500 fps
+        anim.save(filename, writer='pillow', fps=500)
         print(f"Saved animation as {filename}")
 
     plt.legend()
     plt.show()
 
 # Example usage:
-csv_file = "/home/hisham246/uwaterloo/surface_wiping_test/policy_actions_20250908_180104.csv"
+csv_file = "/home/hisham246/uwaterloo/surface_wiping_test/policy_actions_20250908_160524.csv"
+# csv_file = "/home/hisham246/uwaterloo/surface_wiping_unet/vanilla/policy_actions_20250907_222909.csv"
 plot_positions_and_rotations(csv_file, skip=1, start=0)
 animate_robot_frame(csv_file, save_animation=False)
