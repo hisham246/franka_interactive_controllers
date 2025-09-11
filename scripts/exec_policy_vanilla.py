@@ -101,12 +101,12 @@ def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
 
 
 def main():
-    output = '/home/hisham246/uwaterloo/surface_wiping_unet'
+    output = '/home/hisham246/uwaterloo/surface_wiping_test_3'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
     match_camera = 0
-    steps_per_inference = 12
+    steps_per_inference = 8
     vis_camera_idx = 0
     max_duration = 120
     frequency = 10
@@ -171,16 +171,16 @@ def main():
                 # init_joints=init_joints,
                 # enable_multi_cam_vis=True,
                 # latency
-                # camera_obs_latency=0.145,
-                # robot_obs_latency=0.0001,
-                # gripper_obs_latency=0.01,
-                # robot_action_latency=0.2,
-                # gripper_action_latency=0.1,
-                camera_obs_latency=0.0,
-                robot_obs_latency=0.0,
-                gripper_obs_latency=0.0,
-                robot_action_latency=0.0,
-                gripper_action_latency=0.0,
+                camera_obs_latency=0.145,
+                robot_obs_latency=0.0001,
+                gripper_obs_latency=0.01,
+                robot_action_latency=0.2,
+                gripper_action_latency=0.1,
+                # camera_obs_latency=0.0,
+                # robot_obs_latency=0.0,
+                # gripper_obs_latency=0.0,
+                # robot_action_latency=0.0,
+                # gripper_action_latency=0.0,
                 # obs
                 camera_obs_horizon=cfg.task.shape_meta.obs.camera0_rgb.horizon,
                 robot_obs_horizon=cfg.task.shape_meta.obs.robot0_eef_pos.horizon,
