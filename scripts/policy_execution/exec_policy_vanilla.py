@@ -130,268 +130,268 @@ def main():
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
 
-    print("Config:", cfg)
+    # print("Config:", cfg)
 
-    # cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
-    # cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
-    # cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
+    cfg._target_ = "diffusion_policy.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace"
+    cfg.policy._target_ = "diffusion_policy.diffusion_unet_timm_policy.DiffusionUnetTimmPolicy"
+    cfg.policy.obs_encoder._target_ = "policy_utils.timm_obs_encoder.TimmObsEncoder"
+    cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
+
+    # cfg._target_ = "diffusion_policy.train_diffusion_transformer_timm_workspace.TrainDiffusionTransformerTimmWorkspace"
+    # cfg.policy._target_ = "diffusion_policy.diffusion_transformer_timm_policy.DiffusionTransformerTimmPolicy"
+    # cfg.policy.obs_encoder._target_ = "policy_utils.transformer_obs_encoder.TransformerObsEncoder"
     # cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
 
-    # # cfg._target_ = "diffusion_policy.train_diffusion_transformer_timm_workspace.TrainDiffusionTransformerTimmWorkspace"
-    # # cfg.policy._target_ = "diffusion_policy.diffusion_transformer_timm_policy.DiffusionTransformerTimmPolicy"
-    # # cfg.policy.obs_encoder._target_ = "policy_utils.transformer_obs_encoder.TransformerObsEncoder"
-    # # cfg.ema._target_ = "policy_utils.ema_model.EMAModel"
+    # setup experiment
+    dt = 1/frequency
 
-    # # setup experiment
-    # dt = 1/frequency
+    obs_res = get_real_obs_resolution(cfg.task.shape_meta)
+    # load fisheye converter
+    fisheye_converter = None
+    if sim_fov is not None:
+        assert camera_intrinsics is not None
+        opencv_intr_dict = parse_fisheye_intrinsics(
+            json.load(open(camera_intrinsics, 'r')))
+        fisheye_converter = FisheyeRectConverter(
+            **opencv_intr_dict,
+            out_size=obs_res,
+            out_fov=sim_fov
+        )
 
-    # obs_res = get_real_obs_resolution(cfg.task.shape_meta)
-    # # load fisheye converter
-    # fisheye_converter = None
-    # if sim_fov is not None:
-    #     assert camera_intrinsics is not None
-    #     opencv_intr_dict = parse_fisheye_intrinsics(
-    #         json.load(open(camera_intrinsics, 'r')))
-    #     fisheye_converter = FisheyeRectConverter(
-    #         **opencv_intr_dict,
-    #         out_size=obs_res,
-    #         out_fov=sim_fov
-    #     )
-
-    # print("steps_per_inference:", steps_per_inference)
-    # with SharedMemoryManager() as shm_manager:
-    #     with KeystrokeCounter() as key_counter, \
-    #         VicUmiEnv(
-    #             output_dir=output,
-    #             # robot_interface=robot_interface,
-    #             gripper_ip=gripper_ip,
-    #             gripper_port=gripper_port, 
-    #             frequency=frequency,
-    #             obs_image_resolution=obs_res,
-    #             obs_float32=True,
-    #             camera_reorder=None,
-    #             # init_joints=init_joints,
-    #             # enable_multi_cam_vis=True,
-    #             # latency
-    #             camera_obs_latency=0.145,
-    #             robot_obs_latency=0.0001,
-    #             gripper_obs_latency=0.01,
-    #             robot_action_latency=0.2,
-    #             gripper_action_latency=0.1,
-    #             # camera_obs_latency=0.0,
-    #             # robot_obs_latency=0.0,
-    #             # gripper_obs_latency=0.0,
-    #             # robot_action_latency=0.0,
-    #             # gripper_action_latency=0.0,
-    #             # obs
-    #             camera_obs_horizon=cfg.task.shape_meta.obs.camera0_rgb.horizon,
-    #             robot_obs_horizon=cfg.task.shape_meta.obs.robot0_eef_pos.horizon,
-    #             gripper_obs_horizon=cfg.task.shape_meta.obs.robot0_gripper_width.horizon,
-    #             no_mirror=no_mirror,
-    #             fisheye_converter=fisheye_converter,
-    #             mirror_crop=mirror_crop,
-    #             mirror_swap=mirror_swap,
-    #             # action
-    #             max_pos_speed=2.5,
-    #             max_rot_speed=1.5,
-    #             shm_manager=shm_manager) as env:
+    print("steps_per_inference:", steps_per_inference)
+    with SharedMemoryManager() as shm_manager:
+        with KeystrokeCounter() as key_counter, \
+            VicUmiEnv(
+                output_dir=output,
+                # robot_interface=robot_interface,
+                gripper_ip=gripper_ip,
+                gripper_port=gripper_port, 
+                frequency=frequency,
+                obs_image_resolution=obs_res,
+                obs_float32=True,
+                camera_reorder=None,
+                # init_joints=init_joints,
+                # enable_multi_cam_vis=True,
+                # latency
+                camera_obs_latency=0.145,
+                robot_obs_latency=0.0001,
+                gripper_obs_latency=0.01,
+                robot_action_latency=0.2,
+                gripper_action_latency=0.1,
+                # camera_obs_latency=0.0,
+                # robot_obs_latency=0.0,
+                # gripper_obs_latency=0.0,
+                # robot_action_latency=0.0,
+                # gripper_action_latency=0.0,
+                # obs
+                camera_obs_horizon=cfg.task.shape_meta.obs.camera0_rgb.horizon,
+                robot_obs_horizon=cfg.task.shape_meta.obs.robot0_eef_pos.horizon,
+                gripper_obs_horizon=cfg.task.shape_meta.obs.robot0_gripper_width.horizon,
+                no_mirror=no_mirror,
+                fisheye_converter=fisheye_converter,
+                mirror_crop=mirror_crop,
+                mirror_swap=mirror_swap,
+                # action
+                max_pos_speed=2.5,
+                max_rot_speed=1.5,
+                shm_manager=shm_manager) as env:
             
-    #         cv2.setNumThreads(2)
-    #         print("Waiting for camera")
-    #         time.sleep(1.0)
+            cv2.setNumThreads(2)
+            print("Waiting for camera")
+            time.sleep(1.0)
 
-    #         # load match_dataset
-    #         episode_first_frame_map = dict()
-    #         match_replay_buffer = None
-    #         if match_dataset is not None:
-    #             match_dir = pathlib.Path(match_dataset)
-    #             match_zarr_path = match_dir.joinpath('replay_buffer.zarr')
-    #             match_replay_buffer = ReplayBuffer.create_from_path(str(match_zarr_path), mode='r')
-    #             match_video_dir = match_dir.joinpath('videos')
-    #             for vid_dir in match_video_dir.glob("*/"):
-    #                 episode_idx = int(vid_dir.stem)
-    #                 match_video_path = vid_dir.joinpath(f'{match_camera}.mp4')
-    #                 if match_video_path.exists():
-    #                     img = None
-    #                     with av.open(str(match_video_path)) as container:
-    #                         stream = container.streams.video[0]
-    #                         for frame in container.decode(stream):
-    #                             img = frame.to_ndarray(format='rgb24')
-    #                             break
-    #                     episode_first_frame_map[episode_idx] = img
-    #         print(f"Loaded initial frame for {len(episode_first_frame_map)} episodes")
+            # load match_dataset
+            episode_first_frame_map = dict()
+            match_replay_buffer = None
+            if match_dataset is not None:
+                match_dir = pathlib.Path(match_dataset)
+                match_zarr_path = match_dir.joinpath('replay_buffer.zarr')
+                match_replay_buffer = ReplayBuffer.create_from_path(str(match_zarr_path), mode='r')
+                match_video_dir = match_dir.joinpath('videos')
+                for vid_dir in match_video_dir.glob("*/"):
+                    episode_idx = int(vid_dir.stem)
+                    match_video_path = vid_dir.joinpath(f'{match_camera}.mp4')
+                    if match_video_path.exists():
+                        img = None
+                        with av.open(str(match_video_path)) as container:
+                            stream = container.streams.video[0]
+                            for frame in container.decode(stream):
+                                img = frame.to_ndarray(format='rgb24')
+                                break
+                        episode_first_frame_map[episode_idx] = img
+            print(f"Loaded initial frame for {len(episode_first_frame_map)} episodes")
 
-    #         # creating model
-    #         # have to be done after fork to prevent 
-    #         # duplicating CUDA context with ffmpeg nvenc
-    #         cls = hydra.utils.get_class(cfg._target_)
-    #         workspace = cls(cfg)
-    #         workspace: BaseWorkspace
-    #         workspace.load_payload(payload, exclude_keys=None, include_keys=None)
+            # creating model
+            # have to be done after fork to prevent 
+            # duplicating CUDA context with ffmpeg nvenc
+            cls = hydra.utils.get_class(cfg._target_)
+            workspace = cls(cfg)
+            workspace: BaseWorkspace
+            workspace.load_payload(payload, exclude_keys=None, include_keys=None)
 
-    #         policy = workspace.model
-    #         if cfg.training.use_ema:
-    #             policy = workspace.ema_model
-    #         policy.num_inference_steps = 16 # DDIM inference iterations
-    #         obs_pose_rep = cfg.task.pose_repr.obs_pose_repr
-    #         action_pose_repr = cfg.task.pose_repr.action_pose_repr
+            policy = workspace.model
+            if cfg.training.use_ema:
+                policy = workspace.ema_model
+            policy.num_inference_steps = 16 # DDIM inference iterations
+            obs_pose_rep = cfg.task.pose_repr.obs_pose_repr
+            action_pose_repr = cfg.task.pose_repr.action_pose_repr
 
-    #         device = torch.device('cuda')
-    #         policy.eval().to(device)
+            device = torch.device('cuda')
+            policy.eval().to(device)
 
-    #         obs = env.get_obs()
-    #         # print("Observation", obs)           
-    #         episode_start_pose = np.concatenate([
-    #                 obs[f'robot0_eef_pos'],
-    #                 obs[f'robot0_eef_rot_axis_angle']
-    #             ], axis=-1)[-1]
+            obs = env.get_obs()
+            # print("Observation", obs)           
+            episode_start_pose = np.concatenate([
+                    obs[f'robot0_eef_pos'],
+                    obs[f'robot0_eef_rot_axis_angle']
+                ], axis=-1)[-1]
             
-    #         # ---- SE(3) state & limits ----
-    #         v_max = 0.75   # m/s (tune)
-    #         w_max = 0.9    # rad/s (tune)
+            # ---- SE(3) state & limits ----
+            v_max = 0.75   # m/s (tune)
+            w_max = 0.9    # rad/s (tune)
 
-    #         p_last = obs['robot0_eef_pos'][-1].copy()
-    #         q_last = R.from_rotvec(obs['robot0_eef_rot_axis_angle'][-1].copy()).as_quat()
+            p_last = obs['robot0_eef_pos'][-1].copy()
+            q_last = R.from_rotvec(obs['robot0_eef_rot_axis_angle'][-1].copy()).as_quat()
 
-    #         # print("start pose", episode_start_pose)
-    #         with torch.no_grad():
-    #             policy.reset()
-    #             obs_dict_np = get_real_umi_obs_dict(
-    #                 env_obs=obs, shape_meta=cfg.task.shape_meta, 
-    #                 obs_pose_repr=obs_pose_rep,
-    #                 episode_start_pose=episode_start_pose)
-    #             obs_dict = dict_apply(obs_dict_np, 
-    #                 lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
-    #             result = policy.predict_action(obs_dict)
-    #             action = result['action_pred'][0].detach().to('cpu').numpy()
-    #             # assert action.shape[-1] == 16
-    #             assert action.shape[-1] == 10
-    #             action = get_real_umi_action(action, obs, action_pose_repr)
-    #             # assert action.shape[-1] == 10
-    #             assert action.shape[-1] == 7
-    #             del result
+            # print("start pose", episode_start_pose)
+            with torch.no_grad():
+                policy.reset()
+                obs_dict_np = get_real_umi_obs_dict(
+                    env_obs=obs, shape_meta=cfg.task.shape_meta, 
+                    obs_pose_repr=obs_pose_rep,
+                    episode_start_pose=episode_start_pose)
+                obs_dict = dict_apply(obs_dict_np, 
+                    lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                result = policy.predict_action(obs_dict)
+                action = result['action_pred'][0].detach().to('cpu').numpy()
+                # assert action.shape[-1] == 16
+                assert action.shape[-1] == 10
+                action = get_real_umi_action(action, obs, action_pose_repr)
+                # assert action.shape[-1] == 10
+                assert action.shape[-1] == 7
+                del result
 
-    #         print("Waiting to get to the stop button...")
-    #         time.sleep(3.0)  # wait to get to stop button for safety!
-    #         print('Ready!')
+            print("Waiting to get to the stop button...")
+            time.sleep(3.0)  # wait to get to stop button for safety!
+            print('Ready!')
 
-    #         while True:                
-    #             # ========== policy control loop ==============
-    #             try:
-    #                 # start episode
-    #                 policy.reset()
-    #                 start_delay = 1.0
-    #                 eval_t_start = time.time() + start_delay
-    #                 t_start = time.monotonic() + start_delay
-    #                 env.start_episode(eval_t_start)
+            while True:                
+                # ========== policy control loop ==============
+                try:
+                    # start episode
+                    policy.reset()
+                    start_delay = 1.0
+                    eval_t_start = time.time() + start_delay
+                    t_start = time.monotonic() + start_delay
+                    env.start_episode(eval_t_start)
 
-    #                 # wait for 1/30 sec to get the closest frame actually
-    #                 # reduces overall latency
-    #                 frame_latency = 1/60
-    #                 precise_wait(eval_t_start - frame_latency, time_func=time.time)
-    #                 print("Started!")
+                    # wait for 1/30 sec to get the closest frame actually
+                    # reduces overall latency
+                    frame_latency = 1/60
+                    precise_wait(eval_t_start - frame_latency, time_func=time.time)
+                    print("Started!")
 
-    #                 iter_idx = 0
-    #                 # last_action_end_time = time.time()
-    #                 action_log = []
-    #                 while True:
-    #                     # calculate timing
-    #                     t_cycle_end = t_start + (iter_idx + steps_per_inference) * dt
+                    iter_idx = 0
+                    # last_action_end_time = time.time()
+                    action_log = []
+                    while True:
+                        # calculate timing
+                        t_cycle_end = t_start + (iter_idx + steps_per_inference) * dt
 
-    #                     # get obs
-    #                     obs = env.get_obs()
-    #                     # print("Camera:", obs['camera0_rgb'].shape)
-    #                     episode_start_pose = np.concatenate([
-    #                         obs[f'robot0_eef_pos'],
-    #                         obs[f'robot0_eef_rot_axis_angle']
-    #                     ], axis=-1)[-1]
-    #                     obs_timestamps = obs['timestamp']
-    #                     # print(f'Obs latency {time.time() - obs_timestamps[-1]}')
+                        # get obs
+                        obs = env.get_obs()
+                        # print("Camera:", obs['camera0_rgb'].shape)
+                        episode_start_pose = np.concatenate([
+                            obs[f'robot0_eef_pos'],
+                            obs[f'robot0_eef_rot_axis_angle']
+                        ], axis=-1)[-1]
+                        obs_timestamps = obs['timestamp']
+                        # print(f'Obs latency {time.time() - obs_timestamps[-1]}')
 
-    #                     # run inference
-    #                     with torch.no_grad():
-    #                         s = time.time()
-    #                         obs_dict_np = get_real_umi_obs_dict(
-    #                             env_obs=obs, shape_meta=cfg.task.shape_meta, 
-    #                             obs_pose_repr=obs_pose_rep,
-    #                             episode_start_pose=episode_start_pose)
-    #                         obs_dict = dict_apply(obs_dict_np, 
-    #                             lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
-    #                         result = policy.predict_action(obs_dict)
-    #                         raw_action = result['action_pred'][0].detach().to('cpu').numpy()
-    #                         action = get_real_umi_action(raw_action, obs, action_pose_repr)
-    #                         action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
-    #                         this_target_poses = action
+                        # run inference
+                        with torch.no_grad():
+                            s = time.time()
+                            obs_dict_np = get_real_umi_obs_dict(
+                                env_obs=obs, shape_meta=cfg.task.shape_meta, 
+                                obs_pose_repr=obs_pose_rep,
+                                episode_start_pose=episode_start_pose)
+                            obs_dict = dict_apply(obs_dict_np, 
+                                lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                            result = policy.predict_action(obs_dict)
+                            raw_action = result['action_pred'][0].detach().to('cpu').numpy()
+                            action = get_real_umi_action(raw_action, obs, action_pose_repr)
+                            action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
+                            this_target_poses = action
 
-    #                         action_exec_latency = 0.01
-    #                         curr_time = time.time()
-    #                         is_new = action_timestamps > (curr_time + action_exec_latency)
-    #                         # print("Is new:", is_new)
-    #                         if np.sum(is_new) == 0:
-    #                             # exceeded time budget, still do something
-    #                             this_target_poses = this_target_poses[[-1]]
-    #                             # schedule on next available step
-    #                             next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
-    #                             action_timestamp = eval_t_start + (next_step_idx) * dt
-    #                             print('Over budget', action_timestamp - curr_time)
-    #                             action_timestamps = np.array([action_timestamp])
-    #                         else:
-    #                             this_target_poses = this_target_poses[is_new]
-    #                             action_timestamps = action_timestamps[is_new]
+                            action_exec_latency = 0.01
+                            curr_time = time.time()
+                            is_new = action_timestamps > (curr_time + action_exec_latency)
+                            # print("Is new:", is_new)
+                            if np.sum(is_new) == 0:
+                                # exceeded time budget, still do something
+                                this_target_poses = this_target_poses[[-1]]
+                                # schedule on next available step
+                                next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
+                                action_timestamp = eval_t_start + (next_step_idx) * dt
+                                print('Over budget', action_timestamp - curr_time)
+                                action_timestamps = np.array([action_timestamp])
+                            else:
+                                this_target_poses = this_target_poses[is_new]
+                                action_timestamps = action_timestamps[is_new]
 
-    #                         for a, t in zip(this_target_poses, action_timestamps):
-    #                             a = a.tolist()
-    #                             action_log.append({
-    #                                 'timestamp': t,
-    #                                 'ee_pos_0': a[0],
-    #                                 'ee_pos_1': a[1],
-    #                                 'ee_pos_2': a[2],
-    #                                 'ee_rot_0': a[3],
-    #                                 'ee_rot_1': a[4],
-    #                                 'ee_rot_2': a[5]
-    #                             })
+                            for a, t in zip(this_target_poses, action_timestamps):
+                                a = a.tolist()
+                                action_log.append({
+                                    'timestamp': t,
+                                    'ee_pos_0': a[0],
+                                    'ee_pos_1': a[1],
+                                    'ee_pos_2': a[2],
+                                    'ee_rot_0': a[3],
+                                    'ee_rot_1': a[4],
+                                    'ee_rot_2': a[5]
+                                })
 
-    #                         # execute actions
-    #                         env.exec_actions(
-    #                             actions=this_target_poses,
-    #                             timestamps=action_timestamps,
-    #                             compensate_latency=True
-    #                         )
-    #                         print(f"Submitted {len(this_target_poses)} steps of actions.")
+                            # execute actions
+                            env.exec_actions(
+                                actions=this_target_poses,
+                                timestamps=action_timestamps,
+                                compensate_latency=True
+                            )
+                            print(f"Submitted {len(this_target_poses)} steps of actions.")
 
-    #                     # _ = cv2.pollKey()
-    #                     press_events = key_counter.get_press_events()
-    #                     stop_episode = False
-    #                     for key_stroke in press_events:
-    #                         if key_stroke == KeyCode(char='s'):
-    #                             # Stop episode
-    #                             # Hand control back to human
-    #                             print('Stopped.')
-    #                             stop_episode = True
+                        # _ = cv2.pollKey()
+                        press_events = key_counter.get_press_events()
+                        stop_episode = False
+                        for key_stroke in press_events:
+                            if key_stroke == KeyCode(char='s'):
+                                # Stop episode
+                                # Hand control back to human
+                                print('Stopped.')
+                                stop_episode = True
 
-    #                     t_since_start = time.time() - eval_t_start
-    #                     if t_since_start > max_duration:
-    #                         print("Max Duration reached.")
-    #                         stop_episode = True
-    #                     if stop_episode:
-    #                         env.end_episode()
-    #                         break
+                        t_since_start = time.time() - eval_t_start
+                        if t_since_start > max_duration:
+                            print("Max Duration reached.")
+                            stop_episode = True
+                        if stop_episode:
+                            env.end_episode()
+                            break
 
-    #                     # wait for execution
-    #                     precise_wait(t_cycle_end - frame_latency)
+                        # wait for execution
+                        precise_wait(t_cycle_end - frame_latency)
 
-    #                     iter_idx += steps_per_inference
+                        iter_idx += steps_per_inference
 
-    #             except KeyboardInterrupt:
-    #                 print("Interrupted!")
-    #                 if len(action_log) > 0:
-    #                     df = pd.DataFrame(action_log)
-    #                     time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    #                     csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
-    #                     df.to_csv(csv_path, index=False)
-    #                     print(f"Saved actions to {csv_path}")
-    #                 # stop robot.
-    #                 env.end_episode()
+                except KeyboardInterrupt:
+                    print("Interrupted!")
+                    if len(action_log) > 0:
+                        df = pd.DataFrame(action_log)
+                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
+                        df.to_csv(csv_path, index=False)
+                        print(f"Saved actions to {csv_path}")
+                    # stop robot.
+                    env.end_episode()
                     
 if __name__ == '__main__':
     main()
