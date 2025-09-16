@@ -120,7 +120,7 @@ def main():
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_unet_position_control_16_actions.ckpt'
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
     # ckpt_path = '/home/hisham246/uwaterloo/cup_in_the_wild/cup_wild_vit_l_1img.ckpt'
 
@@ -339,8 +339,11 @@ def main():
                                 this_target_poses = this_target_poses[is_new]
                                 action_timestamps = action_timestamps[is_new]
 
+                            this_target_poses = this_target_poses[:steps_per_inference]
+                            action_timestamps = action_timestamps[:steps_per_inference]
                             for a, t in zip(this_target_poses, action_timestamps):
                                 a = a.tolist()
+                                print("Actions", a)
                                 action_log.append({
                                     'timestamp': t,
                                     'ee_pos_0': a[0],
