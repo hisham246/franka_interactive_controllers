@@ -9,6 +9,7 @@ from policy_utils.normalizer import LinearNormalizer
 from policy_utils.base_image_policy import BaseImagePolicy
 from policy_utils.conditional_unet1d import ConditionalUnet1D
 from policy_utils.timm_obs_encoder import TimmObsEncoder
+from policy_utils.flow_adapter import DiffusionAsFlow
 
 
 class DiffusionUnetTimmPolicy(BaseImagePolicy):
@@ -76,6 +77,13 @@ class DiffusionUnetTimmPolicy(BaseImagePolicy):
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
 
+        self.flow_adapter = DiffusionAsFlow(
+            model=self.model,
+            noise_scheduler=self.noise_scheduler,
+            pred_type=self.noise_scheduler.config.prediction_type  # 'epsilon' or 'sample'
+        )
+        self.flow_n_steps = int(self.num_inference_steps)  # good default; can tune later for latency/quality
+
     # ========= inference  ============
     def conditional_sample(self, 
             condition_data,
@@ -117,6 +125,30 @@ class DiffusionUnetTimmPolicy(BaseImagePolicy):
         trajectory[condition_mask] = condition_data[condition_mask]        
 
         return trajectory
+    
+    @torch.no_grad()
+    def sample_chunk_flow(self, global_cond, generator=None, n_steps=None):
+        """
+        Deterministic flow sampler.
+        Iterates reverse diffusion indices (high->low) and uses z <- z - (1/n) * v,
+        with v = (ε - x0), which is equivalent to stepping + (x0 - ε).
+        Returns a normalized action chunk [B, H, D].
+        """
+        if n_steps is None: n_steps = self.flow_n_steps
+        B = global_cond.shape[0]
+        H, D = self.action_horizon, self.action_dim
+
+        # Start from standard Normal in normalized action space
+        z = torch.randn((B, H, D), dtype=self.dtype, device=global_cond.device, generator=generator)
+
+        # Use the SAME discrete scheduler timesteps you already use for DDIM/DDPM
+        self.noise_scheduler.set_timesteps(n_steps)
+        for k, t_id in enumerate(self.noise_scheduler.timesteps):
+            # one Euler step on the flow ODE
+            v = self.flow_adapter.velocity(z, t_id, global_cond)   # [B,H,D]
+            z = z - (1.0 / n_steps) * v
+
+        return z  # still normalized; unnormalize in predict_action
 
 
     def predict_action(self, obs_dict: Dict[str, torch.Tensor], fixed_action_prefix: torch.Tensor=None) -> Dict[str, torch.Tensor]:
@@ -162,6 +194,17 @@ class DiffusionUnetTimmPolicy(BaseImagePolicy):
             'action_pred': action_pred
         }
         return result
+    
+    def predict_action_flow(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        assert 'past_action' not in obs_dict
+        nobs = self.normalizer.normalize(obs_dict)
+        global_cond = self.obs_encoder(nobs)  # [B, feat]
+
+        # Flow sampling in normalized space, then unnormalize
+        nsample = self.sample_chunk_flow(global_cond=global_cond, n_steps=self.flow_n_steps)
+        action_pred = self.normalizer['action'].unnormalize(nsample)
+
+        return {'action': action_pred, 'action_pred': action_pred}
 
     # ========= training  ============
     def set_normalizer(self, normalizer: LinearNormalizer):
