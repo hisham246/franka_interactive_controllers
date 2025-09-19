@@ -101,7 +101,7 @@ def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
 
 
 def main():
-    output = '/home/hisham246/uwaterloo/reaching_ball_unet'
+    output = '/home/hisham246/uwaterloo/reaching_ball_multimodal'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
@@ -120,7 +120,7 @@ def main():
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/surface_wiping_transformer_position_control.ckpt'
 
     # Diffusion UNet
-    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/reaching_ball_unet.ckpt'
+    ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/reaching_ball_multimodal.ckpt'
     # ckpt_path = '/home/hisham246/uwaterloo/diffusion_policy_models/diffusion_unet_pickplace_2.ckpt'
     # ckpt_path = '/home/hisham246/uwaterloo/cup_in_the_wild/cup_wild_vit_l_1img.ckpt'
 
