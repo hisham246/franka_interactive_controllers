@@ -99,40 +99,69 @@ def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
         q_new = q_cmd if np.dot(q_prev, q_cmd) >= 0 else -q_cmd
     return p_new, _q_norm(q_new)
 
-def remap_xy_pose_sequence(poses, swap_xy=True, invert_x=False, invert_y=False):
+def _Rz(theta_rad):
+    c, s = np.cos(theta_rad), np.sin(theta_rad)
+    return np.array([[ c, -s, 0],
+                     [ s,  c, 0],
+                     [ 0,  0, 1]], dtype=float)
+
+# robot -> policy:  x_p = -y_r,  y_p = x_r,  z same
+_M    = _Rz(np.deg2rad(90.0))
+# policy -> robot (inverse)
+_Minv = _Rz(np.deg2rad(-90.0))
+
+def _map_pose_array(arr, M):
     """
-    Remap a sequence of SE(3) poses encoded as [x,y,z, rx,ry,rz, (optional: gripper)].
-    - swap_xy: if True, swaps X and Y for both position and axis-angle vector.
-    - invert_x / invert_y: optional sign flips if you later discover a sign mismatch.
+    Apply 3x3 map M to position and axis-angle parts of pose arrays.
+    Accepts shapes (...,6) or (...,7): [x,y,z, rx,ry,rz, (gripper?)]
+    Returns a copy with same shape.
+    """
+    a = np.asarray(arr).copy()
+    if a.ndim == 1:
+        a = a[None, ...]
+        squeeze = True
+    else:
+        squeeze = False
+    a[..., 0:3] = a[..., 0:3] @ M.T
+    a[..., 3:6] = a[..., 3:6] @ M.T
+    if squeeze:
+        a = a[0]
+    return a
+
+# def remap_xy_pose_sequence(poses, swap_xy=True, invert_x=False, invert_y=False):
+#     """
+#     Remap a sequence of SE(3) poses encoded as [x,y,z, rx,ry,rz, (optional: gripper)].
+#     - swap_xy: if True, swaps X and Y for both position and axis-angle vector.
+#     - invert_x / invert_y: optional sign flips if you later discover a sign mismatch.
     
-    Accepts shape (T,7) or (T,6) or (7,) / (6,). Returns an array of same shape.
-    """
-    poses = np.asarray(poses).copy()
-    single = poses.ndim == 1
-    if single:
-        poses = poses[None, ...]   # (1, D)
+#     Accepts shape (T,7) or (T,6) or (7,) / (6,). Returns an array of same shape.
+#     """
+#     poses = np.asarray(poses).copy()
+#     single = poses.ndim == 1
+#     if single:
+#         poses = poses[None, ...]   # (1, D)
 
-    D = poses.shape[1]
-    if D < 6:
-        raise ValueError("poses must have at least 6 elements per step: [x,y,z, rx,ry,rz, ...]")
+#     D = poses.shape[1]
+#     if D < 6:
+#         raise ValueError("poses must have at least 6 elements per step: [x,y,z, rx,ry,rz, ...]")
 
-    # Build a 3x3 linear map P that acts on [x,y,z] and [rx,ry,rz]
-    # Start as identity then (optionally) swap x<->y and flip signs.
-    P = np.eye(3)
-    if swap_xy:
-        P = P[[1,0,2], :]  # swap basis x<->y
-    if invert_x:
-        P[0,0] *= -1
-    if invert_y:
-        P[1,1] *= -1
+#     # Build a 3x3 linear map P that acts on [x,y,z] and [rx,ry,rz]
+#     # Start as identity then (optionally) swap x<->y and flip signs.
+#     P = np.eye(3)
+#     if swap_xy:
+#         P = P[[1,0,2], :]  # swap basis x<->y
+#     if invert_x:
+#         P[0,0] *= -1
+#     if invert_y:
+#         P[1,1] *= -1
 
-    # Apply to position and axis-angle (row vectors)
-    poses[:, 0:3] = poses[:, 0:3] @ P.T
-    poses[:, 3:6] = poses[:, 3:6] @ P.T
+#     # Apply to position and axis-angle (row vectors)
+#     poses[:, 0:3] = poses[:, 0:3] @ P.T
+#     poses[:, 3:6] = poses[:, 3:6] @ P.T
 
-    if single:
-        poses = poses[0]
-    return poses
+#     if single:
+#         poses = poses[0]
+#     return poses
 
 def main():
     output = '/home/hisham246/uwaterloo/reaching_ball_multimodal_2'
@@ -274,15 +303,19 @@ def main():
             policy.eval().to(device)
 
             obs = env.get_obs()
+
+            obs_policy = dict(obs)
+            obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M.T
+            obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M.T
             # print("Observation", obs)           
             episode_start_pose = np.concatenate([
-                    obs[f'robot0_eef_pos'],
-                    obs[f'robot0_eef_rot_axis_angle']
+                    obs_policy[f'robot0_eef_pos'],
+                    obs_policy[f'robot0_eef_rot_axis_angle']
                 ], axis=-1)[-1]
             
-            # ---- SE(3) state & limits ----
-            v_max = 1.75   # m/s (tune)
-            w_max = 1.5    # rad/s (tune)
+            # SE(3) state and limits
+            v_max = 1.75   # m/s
+            w_max = 1.5    # rad/s
 
             p_last = obs['robot0_eef_pos'][-1].copy()
             q_last = R.from_rotvec(obs['robot0_eef_rot_axis_angle'][-1].copy()).as_quat()
@@ -291,17 +324,20 @@ def main():
             with torch.no_grad():
                 policy.reset()
                 obs_dict_np = get_real_umi_obs_dict(
-                    env_obs=obs, shape_meta=cfg.task.shape_meta, 
+                    env_obs=obs_policy, shape_meta=cfg.task.shape_meta, 
                     obs_pose_repr=obs_pose_rep,
                     episode_start_pose=episode_start_pose)
                 obs_dict = dict_apply(obs_dict_np, 
                     lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                
                 result = policy.predict_action(obs_dict)
                 action = result['action_pred'][0].detach().to('cpu').numpy()
                 # assert action.shape[-1] == 16
                 assert action.shape[-1] == 10
-                action = get_real_umi_action(action, obs, action_pose_repr)
-                action = remap_xy_pose_sequence(action, swap_xy=True)
+                # Action produced in policy frame, convert to robot frame for execution
+                action_policy = get_real_umi_action(action, obs_policy, action_pose_repr)
+                action_robot  = _map_pose_array(action_policy, _Minv)  # map back
+                action = action_robot                
                 # assert action.shape[-1] == 10
                 assert action.shape[-1] == 7
                 del result
@@ -335,57 +371,96 @@ def main():
 
                         # get obs
                         obs = env.get_obs()
+                        obs_policy = dict(obs)
+                        obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M.T
+                        obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M.T
                         # print("Camera:", obs['camera0_rgb'].shape)
                         episode_start_pose = np.concatenate([
-                            obs[f'robot0_eef_pos'],
-                            obs[f'robot0_eef_rot_axis_angle']
+                            obs_policy[f'robot0_eef_pos'],
+                            obs_policy[f'robot0_eef_rot_axis_angle']
                         ], axis=-1)[-1]
-                        obs_timestamps = obs['timestamp']
+                        obs_timestamps = obs_policy['timestamp']
                         # print(f'Obs latency {time.time() - obs_timestamps[-1]}')
 
                         # run inference
                         with torch.no_grad():
                             s = time.time()
                             obs_dict_np = get_real_umi_obs_dict(
-                                env_obs=obs, shape_meta=cfg.task.shape_meta, 
+                                env_obs=obs_policy, shape_meta=cfg.task.shape_meta, 
                                 obs_pose_repr=obs_pose_rep,
                                 episode_start_pose=episode_start_pose)
                             obs_dict = dict_apply(obs_dict_np, 
                                 lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                             result = policy.predict_action(obs_dict)
-                            raw_action = result['action_pred'][0].detach().to('cpu').numpy()
-                            action = get_real_umi_action(raw_action, obs, action_pose_repr)
-                            action = remap_xy_pose_sequence(action, swap_xy=True)
+                            raw_action = result['action_pred'][0].detach().cpu().numpy()
+
+                            # policy to robot mapping for execution
+                            action_policy = get_real_umi_action(raw_action, obs_policy, action_pose_repr)
+                            action_robot = _map_pose_array(action_policy, _Minv)
+                            action = action_robot
                             action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                             this_target_poses = action
+
+                        # action_exec_latency = 0.01
+                        # curr_time = time.time()
+                        # is_new = action_timestamps > (curr_time + action_exec_latency)
+                        # # print("Is new:", is_new)
+                        # if np.sum(is_new) == 0:
+                        #     # exceeded time budget, still do something
+                        #     this_target_poses = this_target_poses[[-1]]
+                        #     # schedule on next available step
+                        #     next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
+                        #     action_timestamp = eval_t_start + (next_step_idx) * dt
+                        #     print('Over budget', action_timestamp - curr_time)
+                        #     action_timestamps = np.array([action_timestamp])
+                        # else:
+                        #     this_target_poses = this_target_poses[is_new]
+                        #     action_timestamps = action_timestamps[is_new]
+
+                        # for a, t in zip(this_target_poses, action_timestamps):
+                        #     a = a.tolist()
+                        #     # print("Actions", a)
+                        #     action_log.append({
+                        #         'timestamp': t,
+                        #         'ee_pos_0': a[0],
+                        #         'ee_pos_1': a[1],
+                        #         'ee_pos_2': a[2],
+                        #         'ee_rot_0': a[3],
+                        #         'ee_rot_1': a[4],
+                        #         'ee_rot_2': a[5]
+                        #     })
 
                         action_exec_latency = 0.01
                         curr_time = time.time()
                         is_new = action_timestamps > (curr_time + action_exec_latency)
-                        # print("Is new:", is_new)
+
                         if np.sum(is_new) == 0:
-                            # exceeded time budget, still do something
-                            this_target_poses = this_target_poses[[-1]]
-                            # schedule on next available step
+                            # exceeded time budget -> take last step only (align both frames!)
+                            robot_subset  = action_robot[[-1]]
+                            policy_subset = action_policy[[-1]]
                             next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
                             action_timestamp = eval_t_start + (next_step_idx) * dt
-                            print('Over budget', action_timestamp - curr_time)
                             action_timestamps = np.array([action_timestamp])
                         else:
-                            this_target_poses = this_target_poses[is_new]
+                            robot_subset  = action_robot[is_new]
+                            policy_subset = action_policy[is_new]
                             action_timestamps = action_timestamps[is_new]
 
-                        for a, t in zip(this_target_poses, action_timestamps):
-                            a = a.tolist()
-                            # print("Actions", a)
+                        # keep your variable names:
+                        this_target_poses = robot_subset
+
+                        # unified logging: robot + policy in one row
+                        for a_robot, a_policy, t in zip(robot_subset, policy_subset, action_timestamps):
                             action_log.append({
                                 'timestamp': t,
-                                'ee_pos_0': a[0],
-                                'ee_pos_1': a[1],
-                                'ee_pos_2': a[2],
-                                'ee_rot_0': a[3],
-                                'ee_rot_1': a[4],
-                                'ee_rot_2': a[5]
+
+                                # robot-frame pose (what you executed)
+                                'robot_x':  a_robot[0], 'robot_y':  a_robot[1], 'robot_z':  a_robot[2],
+                                'robot_rx': a_robot[3], 'robot_ry': a_robot[4], 'robot_rz': a_robot[5],
+
+                                # policy-frame pose (what the policy predicted, before mapping)
+                                'policy_x':  a_policy[0], 'policy_y':  a_policy[1], 'policy_z':  a_policy[2],
+                                'policy_rx': a_policy[3], 'policy_ry': a_policy[4], 'policy_rz': a_policy[5]
                             })
 
                         # execute actions
@@ -432,7 +507,6 @@ def main():
                     
 if __name__ == '__main__':
     main()
-
 
                         # action_exec_latency = 0.01
                         # curr_time = time.time()

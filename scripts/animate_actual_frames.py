@@ -10,8 +10,10 @@ def load_robot_data(csv_file):
 
     # positions = df[['filt_ee_x', 'filt_ee_y', 'filt_ee_z']].values
     # rotations = df[['filt_ee_rx', 'filt_ee_ry', 'filt_ee_rz']].values
-    positions = df[['ee_pos_0', 'ee_pos_1', 'ee_pos_2']].values
-    rotations = df[['ee_rot_0', 'ee_rot_1', 'ee_rot_2']].values
+    # positions = df[['policy_x', 'policy_y', 'policy_z']].values
+    # rotations = df[['policy_rx', 'policy_ry', 'policy_rz']].values
+    positions = df[['robot_x', 'robot_y', 'robot_z']].values
+    rotations = df[['robot_rx', 'robot_ry', 'robot_rz']].values
     timestamps = df['timestamp'].values
 
     # normalize timestamps to start from 0
@@ -37,7 +39,6 @@ def plot_positions_and_rotations(csv_file, skip=1, start=0):
 
     # positions, rotations, timestamps = positions[10000:], rotations[10000:], timestamps[10000:]
 
-
     # cut start if needed
     positions, rotations, timestamps = positions[start:], rotations[start:], timestamps[start:]
 
@@ -48,7 +49,7 @@ def plot_positions_and_rotations(csv_file, skip=1, start=0):
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     
-    # --- positions ---
+    # positions
     labels_pos = ['X', 'Y', 'Z']
     for i in range(3):
         ax = axes[0, i]
@@ -58,7 +59,7 @@ def plot_positions_and_rotations(csv_file, skip=1, start=0):
         ax.set_title(f"EE Position {labels_pos[i]}")
         ax.grid(True)
 
-    # --- rotations ---
+    # rotations
     labels_rot = ['Rx', 'Ry', 'Rz']
     for i in range(3):
         ax = axes[1, i]
@@ -136,7 +137,7 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
     plt.legend()
     plt.show()
 
-csv_file = "/home/hisham246/uwaterloo/reaching_ball_multimodal/policy_actions_20250918_214441.csv"
+csv_file = "/home/hisham246/uwaterloo/reaching_ball_multimodal_2/policy_actions_20250919_121022.csv"
 # csv_file = "/home/hisham246/uwaterloo/surface_wiping_test_2/policy_actions_20250909_204904.csv"
 plot_positions_and_rotations(csv_file, skip=1, start=0)
 animate_robot_frame(csv_file, save_animation=False)
