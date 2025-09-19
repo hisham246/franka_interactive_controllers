@@ -41,7 +41,7 @@ from policy_utils.real_inference_util import (get_real_obs_resolution,
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 
-# ---- quat utilities ----
+# quat utilities
 def _q_norm(q): return q / (np.linalg.norm(q) + 1e-12)
 def _q_conj(q): return np.array([-q[0], -q[1], -q[2], q[3]])
 def _q_mul(a,b):
@@ -66,7 +66,7 @@ def _geo_angle(q0,q1):
     d = np.clip(abs(np.dot(_q_norm(q0), _q_norm(q1))), -1.0, 1.0)
     return 2.0*np.arccos(d)  # [0, pi]
 
-# ---- geodesic mean around a reference quaternion ----
+# geodesic mean around a reference quaternion
 def _weighted_mean_quats_around(q_ref, quats, weights):
     # map each quat to tangent at q_ref, average, exp back
     vecs = []
@@ -79,7 +79,7 @@ def _weighted_mean_quats_around(q_ref, quats, weights):
     q_delta = R.from_rotvec(vbar).as_quat()
     return _q_mul(q_ref, q_delta)
 
-# ---- SE(3) step limiter ----
+# SE(3) step limiter
 def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
     # translation
     dp = p_cmd - p_prev
@@ -99,9 +99,43 @@ def _limit_se3_step(p_prev, q_prev, p_cmd, q_cmd, v_max, w_max, dt):
         q_new = q_cmd if np.dot(q_prev, q_cmd) >= 0 else -q_cmd
     return p_new, _q_norm(q_new)
 
+def remap_xy_pose_sequence(poses, swap_xy=True, invert_x=False, invert_y=False):
+    """
+    Remap a sequence of SE(3) poses encoded as [x,y,z, rx,ry,rz, (optional: gripper)].
+    - swap_xy: if True, swaps X and Y for both position and axis-angle vector.
+    - invert_x / invert_y: optional sign flips if you later discover a sign mismatch.
+    
+    Accepts shape (T,7) or (T,6) or (7,) / (6,). Returns an array of same shape.
+    """
+    poses = np.asarray(poses).copy()
+    single = poses.ndim == 1
+    if single:
+        poses = poses[None, ...]   # (1, D)
+
+    D = poses.shape[1]
+    if D < 6:
+        raise ValueError("poses must have at least 6 elements per step: [x,y,z, rx,ry,rz, ...]")
+
+    # Build a 3x3 linear map P that acts on [x,y,z] and [rx,ry,rz]
+    # Start as identity then (optionally) swap x<->y and flip signs.
+    P = np.eye(3)
+    if swap_xy:
+        P = P[[1,0,2], :]  # swap basis x<->y
+    if invert_x:
+        P[0,0] *= -1
+    if invert_y:
+        P[1,1] *= -1
+
+    # Apply to position and axis-angle (row vectors)
+    poses[:, 0:3] = poses[:, 0:3] @ P.T
+    poses[:, 3:6] = poses[:, 3:6] @ P.T
+
+    if single:
+        poses = poses[0]
+    return poses
 
 def main():
-    output = '/home/hisham246/uwaterloo/reaching_ball_multimodal'
+    output = '/home/hisham246/uwaterloo/reaching_ball_multimodal_2'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
@@ -267,6 +301,7 @@ def main():
                 # assert action.shape[-1] == 16
                 assert action.shape[-1] == 10
                 action = get_real_umi_action(action, obs, action_pose_repr)
+                action = remap_xy_pose_sequence(action, swap_xy=True)
                 # assert action.shape[-1] == 10
                 assert action.shape[-1] == 7
                 del result
@@ -320,100 +355,46 @@ def main():
                             result = policy.predict_action(obs_dict)
                             raw_action = result['action_pred'][0].detach().to('cpu').numpy()
                             action = get_real_umi_action(raw_action, obs, action_pose_repr)
+                            action = remap_xy_pose_sequence(action, swap_xy=True)
                             action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                             this_target_poses = action
 
-                            # action_exec_latency = 0.01
-                            # curr_time = time.time()
-                            # is_new = action_timestamps > (curr_time + action_exec_latency)
-                            # # print("Is new:", is_new)
-                            # if np.sum(is_new) == 0:
-                            #     # exceeded time budget, still do something
-                            #     this_target_poses = this_target_poses[[-1]]
-                            #     # schedule on next available step
-                            #     next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
-                            #     action_timestamp = eval_t_start + (next_step_idx) * dt
-                            #     print('Over budget', action_timestamp - curr_time)
-                            #     action_timestamps = np.array([action_timestamp])
-                            # else:
-                            #     this_target_poses = this_target_poses[is_new]
-                            #     action_timestamps = action_timestamps[is_new]
+                        action_exec_latency = 0.01
+                        curr_time = time.time()
+                        is_new = action_timestamps > (curr_time + action_exec_latency)
+                        # print("Is new:", is_new)
+                        if np.sum(is_new) == 0:
+                            # exceeded time budget, still do something
+                            this_target_poses = this_target_poses[[-1]]
+                            # schedule on next available step
+                            next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
+                            action_timestamp = eval_t_start + (next_step_idx) * dt
+                            print('Over budget', action_timestamp - curr_time)
+                            action_timestamps = np.array([action_timestamp])
+                        else:
+                            this_target_poses = this_target_poses[is_new]
+                            action_timestamps = action_timestamps[is_new]
 
-                            # # Convert action to position and quaternion format for step limiting
-                            # limited_actions = []
-                            # for i, target_pose in enumerate(this_target_poses):
-                            #     # Extract position and rotation from action
-                            #     p_cmd = target_pose[:3]  # position
-                                
-                            #     rotvec = target_pose[3:6]
-                            #     q_cmd = R.from_rotvec(rotvec).as_quat()
-                            #     # Assume quaternion format
-                            #     q_cmd = target_pose[3:7]
-                            
-                            #     # Apply SE(3) step limiter
-                            #     p_limited, q_limited = _limit_se3_step(
-                            #         p_prev=p_last, 
-                            #         q_prev=q_last, 
-                            #         p_cmd=p_cmd, 
-                            #         q_cmd=q_cmd, 
-                            #         v_max=v_max, 
-                            #         w_max=w_max, 
-                            #         dt=dt
-                            #     )
-                                
-                            #     # Convert back to action format
-                            #     rotvec_limited = R.from_quat(q_limited).as_rotvec()
-                            #     limited_action = np.concatenate([p_limited, rotvec_limited])
-                                
-                            #     # Add gripper action if present
-                            #     if len(target_pose) > 6:
-                            #         limited_action = np.concatenate([limited_action, target_pose[6:]])
-                                
-                            #     limited_actions.append(limited_action)
-                                
-                            #     # Update last pose for next iteration
-                            #     p_last = p_limited.copy()
-                            #     q_last = q_limited.copy()
+                        for a, t in zip(this_target_poses, action_timestamps):
+                            a = a.tolist()
+                            # print("Actions", a)
+                            action_log.append({
+                                'timestamp': t,
+                                'ee_pos_0': a[0],
+                                'ee_pos_1': a[1],
+                                'ee_pos_2': a[2],
+                                'ee_rot_0': a[3],
+                                'ee_rot_1': a[4],
+                                'ee_rot_2': a[5]
+                            })
 
-                            # # Convert back to numpy array
-                            # this_target_poses = np.array(limited_actions)
-
-                            action_exec_latency = 0.01
-                            curr_time = time.time()
-                            is_new = action_timestamps > (curr_time + action_exec_latency)
-                            # print("Is new:", is_new)
-                            if np.sum(is_new) == 0:
-                                # exceeded time budget, still do something
-                                this_target_poses = this_target_poses[[-1]]
-                                # schedule on next available step
-                                next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
-                                action_timestamp = eval_t_start + (next_step_idx) * dt
-                                print('Over budget', action_timestamp - curr_time)
-                                action_timestamps = np.array([action_timestamp])
-                            else:
-                                this_target_poses = this_target_poses[is_new]
-                                action_timestamps = action_timestamps[is_new]
-
-                            for a, t in zip(this_target_poses, action_timestamps):
-                                a = a.tolist()
-                                # print("Actions", a)
-                                action_log.append({
-                                    'timestamp': t,
-                                    'ee_pos_0': a[0],
-                                    'ee_pos_1': a[1],
-                                    'ee_pos_2': a[2],
-                                    'ee_rot_0': a[3],
-                                    'ee_rot_1': a[4],
-                                    'ee_rot_2': a[5]
-                                })
-
-                            # execute actions
-                            env.exec_actions(
-                                actions=this_target_poses,
-                                timestamps=action_timestamps,
-                                compensate_latency=True
-                            )
-                            print(f"Submitted {len(this_target_poses)} steps of actions.")
+                        # execute actions
+                        env.exec_actions(
+                            actions=this_target_poses,
+                            timestamps=action_timestamps,
+                            compensate_latency=True
+                        )
+                        print(f"Submitted {len(this_target_poses)} steps of actions.")
 
                         # _ = cv2.pollKey()
                         press_events = key_counter.get_press_events()
@@ -452,6 +433,61 @@ def main():
 if __name__ == '__main__':
     main()
 
+
+                        # action_exec_latency = 0.01
+                        # curr_time = time.time()
+                        # is_new = action_timestamps > (curr_time + action_exec_latency)
+                        # # print("Is new:", is_new)
+                        # if np.sum(is_new) == 0:
+                        #     # exceeded time budget, still do something
+                        #     this_target_poses = this_target_poses[[-1]]
+                        #     # schedule on next available step
+                        #     next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
+                        #     action_timestamp = eval_t_start + (next_step_idx) * dt
+                        #     print('Over budget', action_timestamp - curr_time)
+                        #     action_timestamps = np.array([action_timestamp])
+                        # else:
+                        #     this_target_poses = this_target_poses[is_new]
+                        #     action_timestamps = action_timestamps[is_new]
+
+                        # # Convert action to position and quaternion format for step limiting
+                        # limited_actions = []
+                        # for i, target_pose in enumerate(this_target_poses):
+                        #     # Extract position and rotation from action
+                        #     p_cmd = target_pose[:3]  # position
+                            
+                        #     rotvec = target_pose[3:6]
+                        #     q_cmd = R.from_rotvec(rotvec).as_quat()
+                        #     # Assume quaternion format
+                        #     q_cmd = target_pose[3:7]
+                        
+                        #     # Apply SE(3) step limiter
+                        #     p_limited, q_limited = _limit_se3_step(
+                        #         p_prev=p_last, 
+                        #         q_prev=q_last, 
+                        #         p_cmd=p_cmd, 
+                        #         q_cmd=q_cmd, 
+                        #         v_max=v_max, 
+                        #         w_max=w_max, 
+                        #         dt=dt
+                        #     )
+                            
+                        #     # Convert back to action format
+                        #     rotvec_limited = R.from_quat(q_limited).as_rotvec()
+                        #     limited_action = np.concatenate([p_limited, rotvec_limited])
+                            
+                        #     # Add gripper action if present
+                        #     if len(target_pose) > 6:
+                        #         limited_action = np.concatenate([limited_action, target_pose[6:]])
+                            
+                        #     limited_actions.append(limited_action)
+                            
+                        #     # Update last pose for next iteration
+                        #     p_last = p_limited.copy()
+                        #     q_last = q_limited.copy()
+
+                        # # Convert back to numpy array
+                        # this_target_poses = np.array(limited_actions)
 
                             # # Build rate-limited poses in SE(3) (position + quaternion with slerp cap).
                             # # p_last/q_last should be kept outside the loop (you already init them once before the episode).
