@@ -91,7 +91,7 @@ def plot_all_orientations(csv_directory):
 # Main execution
 if __name__ == "__main__":
     # Directory containing your CSV files
-    csv_directory = "/home/hisham246/uwaterloo/umi/surface_wiping_tp/csv/"
+    csv_directory = "/home/hisham246/uwaterloo/umi/reaching_ball_multimodal/csv/"
     
     # Plot all orientations in 3 subplots
     print("\n1. Creating orientation comparison plots...")

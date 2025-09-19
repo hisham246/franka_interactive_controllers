@@ -339,44 +339,44 @@ def main():
                             #     this_target_poses = this_target_poses[is_new]
                             #     action_timestamps = action_timestamps[is_new]
 
-                            # Convert action to position and quaternion format for step limiting
-                            limited_actions = []
-                            for i, target_pose in enumerate(this_target_poses):
-                                # Extract position and rotation from action
-                                p_cmd = target_pose[:3]  # position
+                            # # Convert action to position and quaternion format for step limiting
+                            # limited_actions = []
+                            # for i, target_pose in enumerate(this_target_poses):
+                            #     # Extract position and rotation from action
+                            #     p_cmd = target_pose[:3]  # position
                                 
-                                rotvec = target_pose[3:6]
-                                q_cmd = R.from_rotvec(rotvec).as_quat()
-                                # Assume quaternion format
-                                q_cmd = target_pose[3:7]
+                            #     rotvec = target_pose[3:6]
+                            #     q_cmd = R.from_rotvec(rotvec).as_quat()
+                            #     # Assume quaternion format
+                            #     q_cmd = target_pose[3:7]
                             
-                                # Apply SE(3) step limiter
-                                p_limited, q_limited = _limit_se3_step(
-                                    p_prev=p_last, 
-                                    q_prev=q_last, 
-                                    p_cmd=p_cmd, 
-                                    q_cmd=q_cmd, 
-                                    v_max=v_max, 
-                                    w_max=w_max, 
-                                    dt=dt
-                                )
+                            #     # Apply SE(3) step limiter
+                            #     p_limited, q_limited = _limit_se3_step(
+                            #         p_prev=p_last, 
+                            #         q_prev=q_last, 
+                            #         p_cmd=p_cmd, 
+                            #         q_cmd=q_cmd, 
+                            #         v_max=v_max, 
+                            #         w_max=w_max, 
+                            #         dt=dt
+                            #     )
                                 
-                                # Convert back to action format
-                                rotvec_limited = R.from_quat(q_limited).as_rotvec()
-                                limited_action = np.concatenate([p_limited, rotvec_limited])
+                            #     # Convert back to action format
+                            #     rotvec_limited = R.from_quat(q_limited).as_rotvec()
+                            #     limited_action = np.concatenate([p_limited, rotvec_limited])
                                 
-                                # Add gripper action if present
-                                if len(target_pose) > 6:
-                                    limited_action = np.concatenate([limited_action, target_pose[6:]])
+                            #     # Add gripper action if present
+                            #     if len(target_pose) > 6:
+                            #         limited_action = np.concatenate([limited_action, target_pose[6:]])
                                 
-                                limited_actions.append(limited_action)
+                            #     limited_actions.append(limited_action)
                                 
-                                # Update last pose for next iteration
-                                p_last = p_limited.copy()
-                                q_last = q_limited.copy()
+                            #     # Update last pose for next iteration
+                            #     p_last = p_limited.copy()
+                            #     q_last = q_limited.copy()
 
-                            # Convert back to numpy array
-                            this_target_poses = np.array(limited_actions)
+                            # # Convert back to numpy array
+                            # this_target_poses = np.array(limited_actions)
 
                             action_exec_latency = 0.01
                             curr_time = time.time()
