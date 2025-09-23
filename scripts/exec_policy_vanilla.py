@@ -106,9 +106,9 @@ def _Rz(theta_rad):
                      [ 0,  0, 1]], dtype=float)
 
 # robot -> policy:  x_p = -y_r,  y_p = x_r,  z same
-_M    = _Rz(np.deg2rad(90.0))
+_M    = _Rz(np.deg2rad(-90.0))
 # policy -> robot (inverse)
-_Minv = _Rz(np.deg2rad(-90.0))
+_Minv = _Rz(np.deg2rad(90.0))
 
 def _map_pose_array(arr, M):
     """
@@ -122,46 +122,11 @@ def _map_pose_array(arr, M):
         squeeze = True
     else:
         squeeze = False
-    a[..., 0:3] = a[..., 0:3] @ M.T
-    a[..., 3:6] = a[..., 3:6] @ M.T
+    a[..., 0:3] = a[..., 0:3] @ M
+    a[..., 3:6] = a[..., 3:6] @ M
     if squeeze:
         a = a[0]
     return a
-
-# def remap_xy_pose_sequence(poses, swap_xy=True, invert_x=False, invert_y=False):
-#     """
-#     Remap a sequence of SE(3) poses encoded as [x,y,z, rx,ry,rz, (optional: gripper)].
-#     - swap_xy: if True, swaps X and Y for both position and axis-angle vector.
-#     - invert_x / invert_y: optional sign flips if you later discover a sign mismatch.
-    
-#     Accepts shape (T,7) or (T,6) or (7,) / (6,). Returns an array of same shape.
-#     """
-#     poses = np.asarray(poses).copy()
-#     single = poses.ndim == 1
-#     if single:
-#         poses = poses[None, ...]   # (1, D)
-
-#     D = poses.shape[1]
-#     if D < 6:
-#         raise ValueError("poses must have at least 6 elements per step: [x,y,z, rx,ry,rz, ...]")
-
-#     # Build a 3x3 linear map P that acts on [x,y,z] and [rx,ry,rz]
-#     # Start as identity then (optionally) swap x<->y and flip signs.
-#     P = np.eye(3)
-#     if swap_xy:
-#         P = P[[1,0,2], :]  # swap basis x<->y
-#     if invert_x:
-#         P[0,0] *= -1
-#     if invert_y:
-#         P[1,1] *= -1
-
-#     # Apply to position and axis-angle (row vectors)
-#     poses[:, 0:3] = poses[:, 0:3] @ P.T
-#     poses[:, 3:6] = poses[:, 3:6] @ P.T
-
-#     if single:
-#         poses = poses[0]
-#     return poses
 
 def main():
     output = '/home/hisham246/uwaterloo/reaching_ball_multimodal_2'
@@ -453,11 +418,9 @@ def main():
                         for a_robot, a_policy, t in zip(robot_subset, policy_subset, action_timestamps):
                             action_log.append({
                                 'timestamp': t,
-
                                 # robot-frame pose (what you executed)
                                 'robot_x':  a_robot[0], 'robot_y':  a_robot[1], 'robot_z':  a_robot[2],
                                 'robot_rx': a_robot[3], 'robot_ry': a_robot[4], 'robot_rz': a_robot[5],
-
                                 # policy-frame pose (what the policy predicted, before mapping)
                                 'policy_x':  a_policy[0], 'policy_y':  a_policy[1], 'policy_z':  a_policy[2],
                                 'policy_rx': a_policy[3], 'policy_ry': a_policy[4], 'policy_rz': a_policy[5]

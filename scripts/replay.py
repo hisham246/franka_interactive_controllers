@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,6 +14,15 @@ from policy_utils.real_inference_util import get_real_umi_action
 from policy_utils.pytorch_util import dict_apply
 import torch
 from matplotlib.animation import FuncAnimation
+
+# Transformation: policy frame → robot frame
+POLICY_TO_ROBOT_ROT = np.array([
+    [0,  1,  0],
+    [-1, 0,  0],
+    [0,  0,  1]
+], dtype=float)
+
+ROBOT_TO_POLICY_ROT = POLICY_TO_ROBOT_ROT.T  # Inverse is transpose
 
 def save_episode_predictions_full_horizon(results, out_csv_path, save_raw_policy=False):
     """
@@ -184,15 +194,24 @@ class PolicyActionSimulator:
         obs_10d = mat_to_pose10d(processed_pose_mat)
         
         # Compute relative pose with respect to episode start (like in UmiDataset)
-        episode_start_pose = demo_start_pose[0]  # Get the start pose for this episode
-        
-        # Add noise to episode start pose (matching training behavior)
-        episode_start_pose = episode_start_pose + np.random.normal(
-            scale=[0.05, 0.05, 0.05, 0.05, 0.05, 0.05], 
-            size=episode_start_pose.shape
-        )
-        
-        start_pose_mat = pose_to_mat(episode_start_pose)
+        # Your real robot starting pose (column-major → row-major 4x4 matrix)
+        robot_start_pose_colmaj = np.array([
+            0.6054297437135656, -0.0005734414600870319, 0.7958864973046205, 0.0,
+            5.205885202447247e-05, -0.9999901197196974, -0.0007601005593292354, 0.0,
+            0.7958943348494556, 0.0005016300454869032, -0.605435344295194, 0.0,
+            0.312387626442811, 0.3905454094029647, 0.4898630997026142, 1.0
+        ], dtype=float).reshape(4,4, order='F')  # Column-major to row-major
+
+        # Convert robot starting pose to policy frame
+        robot_R = robot_start_pose_colmaj[:3,:3]
+        robot_t = robot_start_pose_colmaj[:3,3]
+
+        policy_R = ROBOT_TO_POLICY_ROT @ robot_R
+        policy_t = ROBOT_TO_POLICY_ROT @ robot_t
+
+        start_pose_mat = np.eye(4)
+        start_pose_mat[:3,:3] = policy_R
+        start_pose_mat[:3,3] = policy_t        
         
         rel_obs_pose_mat = convert_pose_mat_rep(
             pose_matrices,
@@ -755,8 +774,24 @@ def process_episode_method(self, episode_dir):
         }
         executable_actions = []
         for a10 in predicted_action_10d:
-            real_action = get_real_umi_action(a10, env_obs, self.action_pose_repr)
+            # First, convert to 4x4 pose matrix in policy frame
+            pose_mat_policy = pose10d_to_mat(a10)
+
+            # Transform rotation and translation into robot frame
+            R_policy = pose_mat_policy[:3, :3]
+            t_policy = pose_mat_policy[:3, 3]
+
+            R_robot = POLICY_TO_ROBOT_ROT @ R_policy
+            t_robot = POLICY_TO_ROBOT_ROT @ t_policy
+
+            pose_mat_robot = np.eye(4)
+            pose_mat_robot[:3, :3] = R_robot
+            pose_mat_robot[:3, 3] = t_robot
+
+            # Convert back to 7D pose for execution or animation
+            real_action = mat_to_pose(pose_mat_robot)  # returns [x,y,z, rx,ry,rz]
             executable_actions.append(real_action)
+
 
         predicted_actions.append(executable_actions)
         processed_observations.append(obs_dict)
