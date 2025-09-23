@@ -270,8 +270,8 @@ def main():
             obs = env.get_obs()
 
             obs_policy = dict(obs)
-            obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M.T
-            obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M.T
+            obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M
+            obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M
             # print("Observation", obs)           
             episode_start_pose = np.concatenate([
                     obs_policy[f'robot0_eef_pos'],
@@ -301,7 +301,9 @@ def main():
                 assert action.shape[-1] == 10
                 # Action produced in policy frame, convert to robot frame for execution
                 action_policy = get_real_umi_action(action, obs_policy, action_pose_repr)
+                # print("Action in policy frame:", action_policy)
                 action_robot  = _map_pose_array(action_policy, _Minv)  # map back
+                # print("Action in robot frame:", action_robot)
                 action = action_robot                
                 # assert action.shape[-1] == 10
                 assert action.shape[-1] == 7
@@ -336,9 +338,12 @@ def main():
 
                         # get obs
                         obs = env.get_obs()
+                        # print("Raw observation from robot:", obs['robot0_eef_pos'])
                         obs_policy = dict(obs)
-                        obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M.T
-                        obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M.T
+                        obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M
+                        # print("Transformed observation to policy frame:", obs_policy['robot0_eef_pos'])
+
+                        obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M
                         # print("Camera:", obs['camera0_rgb'].shape)
                         episode_start_pose = np.concatenate([
                             obs_policy[f'robot0_eef_pos'],
@@ -361,7 +366,9 @@ def main():
 
                             # policy to robot mapping for execution
                             action_policy = get_real_umi_action(raw_action, obs_policy, action_pose_repr)
-                            action_robot = _map_pose_array(action_policy, _Minv)
+                            print("Action in policy frame:", action_policy)
+                            action_robot  = _map_pose_array(action_policy, _Minv)  # map back
+                            print("Action in robot frame:", action_robot)
                             action = action_robot
                             action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                             this_target_poses = action
@@ -411,7 +418,6 @@ def main():
                             policy_subset = action_policy[is_new]
                             action_timestamps = action_timestamps[is_new]
 
-                        # keep your variable names:
                         this_target_poses = robot_subset
 
                         # unified logging: robot + policy in one row

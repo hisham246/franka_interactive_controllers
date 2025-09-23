@@ -137,7 +137,7 @@ def animate_robot_frame(csv_file, save_animation=False, filename='ee_animation.g
     plt.legend()
     plt.show()
 
-csv_file = "/home/hisham246/uwaterloo/reaching_ball_multimodal_2/policy_actions_20250922_213508.csv"
+csv_file = "/home/hisham246/uwaterloo/reaching_ball_multimodal_2/policy_actions_20250922_223557.csv"
 # csv_file = "/home/hisham246/uwaterloo/surface_wiping_test_2/policy_actions_20250909_204904.csv"
 plot_positions_and_rotations(csv_file, skip=1, start=0)
 animate_robot_frame(csv_file, save_animation=False)
