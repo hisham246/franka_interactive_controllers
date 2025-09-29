@@ -581,33 +581,40 @@
 #     main()
 
 
+# import numpy as np
+# from scipy.spatial.transform import Rotation as R
+
+# # Input: Quaternion
+# quat = [0.909274136907328,
+#         -0.017712128579744538,
+#          0.40625631807017976,
+#          0.08864430808800008]  # [x, y, z, w]
+
+# # Input: Robot frame axis-angle vector (rx, ry, rz)
+# robot_axis_angle = [2.70596709, -0.05325624, 1.20883627]
+
+# # Step 1: Convert quaternion to axis-angle
+# r = R.from_quat(quat)  # Input order is [x, y, z, w]
+# axis_angle_from_quat = r.as_rotvec()
+
+# # Step 2: Compare both (allowing for minor numerical differences)
+# def is_pose_equivalent(vec1, vec2, tol=1e-2):
+#     vec1 = np.array(vec1)
+#     vec2 = np.array(vec2)
+
+#     # Handle potential ambiguity in axis-angle (same rotation can be represented as -v)
+#     if np.allclose(vec1, vec2, atol=tol) or np.allclose(vec1, -vec2, atol=tol):
+#         return True
+#     return False
+
+# # Output
+# print("Axis-angle from quaternion:", axis_angle_from_quat)
+# print("Given robot axis-angle:", robot_axis_angle)
+# print("Equivalent:", is_pose_equivalent(axis_angle_from_quat, robot_axis_angle))
+
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
-# Input: Quaternion
-quat = [0.909274136907328,
-        -0.017712128579744538,
-         0.40625631807017976,
-         0.08864430808800008]  # [x, y, z, w]
+file_path = "/home/hisham246/uwaterloo/reaching_ball_multimodal_3/camera_observations_20250929_175538.npy"
 
-# Input: Robot frame axis-angle vector (rx, ry, rz)
-robot_axis_angle = [2.70596709, -0.05325624, 1.20883627]
-
-# Step 1: Convert quaternion to axis-angle
-r = R.from_quat(quat)  # Input order is [x, y, z, w]
-axis_angle_from_quat = r.as_rotvec()
-
-# Step 2: Compare both (allowing for minor numerical differences)
-def is_pose_equivalent(vec1, vec2, tol=1e-2):
-    vec1 = np.array(vec1)
-    vec2 = np.array(vec2)
-
-    # Handle potential ambiguity in axis-angle (same rotation can be represented as -v)
-    if np.allclose(vec1, vec2, atol=tol) or np.allclose(vec1, -vec2, atol=tol):
-        return True
-    return False
-
-# Output
-print("Axis-angle from quaternion:", axis_angle_from_quat)
-print("Given robot axis-angle:", robot_axis_angle)
-print("Equivalent:", is_pose_equivalent(axis_angle_from_quat, robot_axis_angle))
+file = np.load(file_path)
+print(file.shape)

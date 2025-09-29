@@ -129,7 +129,7 @@ def _map_pose_array(arr, M):
     return a
 
 def main():
-    output = '/home/hisham246/uwaterloo/reaching_ball_multimodal_2'
+    output = '/home/hisham246/uwaterloo/reaching_ball_multimodal_3'
     gripper_ip = '129.97.71.27'
     gripper_port = 4242
     match_dataset = None
@@ -269,13 +269,18 @@ def main():
 
             obs = env.get_obs()
 
-            obs_policy = dict(obs)
-            obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M
-            obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M
-            # print("Observation", obs)           
+            # print("Observation dictionary", obs["camera0_rgb"])
+
+            # obs_policy = dict(obs)
+            # obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M
+            # obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M
+            # episode_start_pose = np.concatenate([
+            #         obs_policy[f'robot0_eef_pos'],
+            #         obs_policy[f'robot0_eef_rot_axis_angle']
+            #     ], axis=-1)[-1]
             episode_start_pose = np.concatenate([
-                    obs_policy[f'robot0_eef_pos'],
-                    obs_policy[f'robot0_eef_rot_axis_angle']
+                    obs[f'robot0_eef_pos'],
+                    obs[f'robot0_eef_rot_axis_angle']
                 ], axis=-1)[-1]
             
             # SE(3) state and limits
@@ -289,22 +294,22 @@ def main():
             with torch.no_grad():
                 policy.reset()
                 obs_dict_np = get_real_umi_obs_dict(
-                    env_obs=obs_policy, shape_meta=cfg.task.shape_meta, 
+                    env_obs=obs, shape_meta=cfg.task.shape_meta, 
                     obs_pose_repr=obs_pose_rep,
                     episode_start_pose=episode_start_pose)
                 obs_dict = dict_apply(obs_dict_np, 
                     lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                 
+                # print("Observation", obs_dict)
+
                 result = policy.predict_action(obs_dict)
                 action = result['action_pred'][0].detach().to('cpu').numpy()
                 # assert action.shape[-1] == 16
                 assert action.shape[-1] == 10
                 # Action produced in policy frame, convert to robot frame for execution
-                action_policy = get_real_umi_action(action, obs_policy, action_pose_repr)
-                # print("Action in policy frame:", action_policy)
-                action_robot  = _map_pose_array(action_policy, _Minv)  # map back
-                # print("Action in robot frame:", action_robot)
-                action = action_robot                
+                action = get_real_umi_action(action, obs, action_pose_repr)
+                # action_robot  = _map_pose_array(action_policy, _Minv)  # map back
+                # action = action_robot                
                 # assert action.shape[-1] == 10
                 assert action.shape[-1] == 7
                 del result
@@ -323,6 +328,8 @@ def main():
                     t_start = time.monotonic() + start_delay
                     env.start_episode(eval_t_start)
 
+                    image_observations = []  # Collect camera images
+
                     # wait for 1/30 sec to get the closest frame actually
                     # reduces overall latency
                     frame_latency = 1/60
@@ -338,99 +345,103 @@ def main():
 
                         # get obs
                         obs = env.get_obs()
-                        # print("Raw observation from robot:", obs['robot0_eef_pos'])
-                        obs_policy = dict(obs)
-                        obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M
+                        
+                        for frame in obs['camera0_rgb']:
+                            image_observations.append(frame)
+
+                        # obs_policy = dict(obs)
+                        # obs_policy['robot0_eef_pos'] = obs_policy['robot0_eef_pos'] @ _M
                         # print("Transformed observation to policy frame:", obs_policy['robot0_eef_pos'])
 
-                        obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M
+                        # obs_policy['robot0_eef_rot_axis_angle'] = obs_policy['robot0_eef_rot_axis_angle'] @ _M
                         # print("Camera:", obs['camera0_rgb'].shape)
                         episode_start_pose = np.concatenate([
-                            obs_policy[f'robot0_eef_pos'],
-                            obs_policy[f'robot0_eef_rot_axis_angle']
+                            obs[f'robot0_eef_pos'],
+                            obs[f'robot0_eef_rot_axis_angle']
                         ], axis=-1)[-1]
-                        obs_timestamps = obs_policy['timestamp']
+                        obs_timestamps = obs['timestamp']
                         # print(f'Obs latency {time.time() - obs_timestamps[-1]}')
 
                         # run inference
                         with torch.no_grad():
                             s = time.time()
                             obs_dict_np = get_real_umi_obs_dict(
-                                env_obs=obs_policy, shape_meta=cfg.task.shape_meta, 
+                                env_obs=obs, shape_meta=cfg.task.shape_meta, 
                                 obs_pose_repr=obs_pose_rep,
                                 episode_start_pose=episode_start_pose)
                             obs_dict = dict_apply(obs_dict_np, 
                                 lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+
+                            # print("Observation dictionary", obs_dict)
+
                             result = policy.predict_action(obs_dict)
                             raw_action = result['action_pred'][0].detach().cpu().numpy()
 
                             # policy to robot mapping for execution
-                            action_policy = get_real_umi_action(raw_action, obs_policy, action_pose_repr)
-                            print("Action in policy frame:", action_policy)
-                            action_robot  = _map_pose_array(action_policy, _Minv)  # map back
-                            print("Action in robot frame:", action_robot)
-                            action = action_robot
+                            action = get_real_umi_action(raw_action, obs, action_pose_repr)
+                            # action_robot  = _map_pose_array(action_policy, _Minv)  # map back
+                            # action = action_robot
                             action_timestamps = (np.arange(len(action), dtype=np.float64)) * dt + obs_timestamps[-1]
                             this_target_poses = action
-
-                        # action_exec_latency = 0.01
-                        # curr_time = time.time()
-                        # is_new = action_timestamps > (curr_time + action_exec_latency)
-                        # # print("Is new:", is_new)
-                        # if np.sum(is_new) == 0:
-                        #     # exceeded time budget, still do something
-                        #     this_target_poses = this_target_poses[[-1]]
-                        #     # schedule on next available step
-                        #     next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
-                        #     action_timestamp = eval_t_start + (next_step_idx) * dt
-                        #     print('Over budget', action_timestamp - curr_time)
-                        #     action_timestamps = np.array([action_timestamp])
-                        # else:
-                        #     this_target_poses = this_target_poses[is_new]
-                        #     action_timestamps = action_timestamps[is_new]
-
-                        # for a, t in zip(this_target_poses, action_timestamps):
-                        #     a = a.tolist()
-                        #     # print("Actions", a)
-                        #     action_log.append({
-                        #         'timestamp': t,
-                        #         'ee_pos_0': a[0],
-                        #         'ee_pos_1': a[1],
-                        #         'ee_pos_2': a[2],
-                        #         'ee_rot_0': a[3],
-                        #         'ee_rot_1': a[4],
-                        #         'ee_rot_2': a[5]
-                        #     })
 
                         action_exec_latency = 0.01
                         curr_time = time.time()
                         is_new = action_timestamps > (curr_time + action_exec_latency)
-
+                        # print("Is new:", is_new)
                         if np.sum(is_new) == 0:
-                            # exceeded time budget -> take last step only (align both frames!)
-                            robot_subset  = action_robot[[-1]]
-                            policy_subset = action_policy[[-1]]
+                            # exceeded time budget, still do something
+                            this_target_poses = this_target_poses[[-1]]
+                            # schedule on next available step
                             next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
                             action_timestamp = eval_t_start + (next_step_idx) * dt
+                            print('Over budget', action_timestamp - curr_time)
                             action_timestamps = np.array([action_timestamp])
                         else:
-                            robot_subset  = action_robot[is_new]
-                            policy_subset = action_policy[is_new]
+                            this_target_poses = this_target_poses[is_new]
                             action_timestamps = action_timestamps[is_new]
 
-                        this_target_poses = robot_subset
-
-                        # unified logging: robot + policy in one row
-                        for a_robot, a_policy, t in zip(robot_subset, policy_subset, action_timestamps):
+                        for a, t in zip(this_target_poses, action_timestamps):
+                            a = a.tolist()
+                            # print("Actions", a)
                             action_log.append({
                                 'timestamp': t,
-                                # robot-frame pose (what you executed)
-                                'robot_x':  a_robot[0], 'robot_y':  a_robot[1], 'robot_z':  a_robot[2],
-                                'robot_rx': a_robot[3], 'robot_ry': a_robot[4], 'robot_rz': a_robot[5],
-                                # policy-frame pose (what the policy predicted, before mapping)
-                                'policy_x':  a_policy[0], 'policy_y':  a_policy[1], 'policy_z':  a_policy[2],
-                                'policy_rx': a_policy[3], 'policy_ry': a_policy[4], 'policy_rz': a_policy[5]
+                                'ee_pos_0': a[0],
+                                'ee_pos_1': a[1],
+                                'ee_pos_2': a[2],
+                                'ee_rot_0': a[3],
+                                'ee_rot_1': a[4],
+                                'ee_rot_2': a[5]
                             })
+
+                        # action_exec_latency = 0.01
+                        # curr_time = time.time()
+                        # is_new = action_timestamps > (curr_time + action_exec_latency)
+
+                        # if np.sum(is_new) == 0:
+                        #     # exceeded time budget -> take last step only (align both frames!)
+                        #     robot_subset  = action_robot[[-1]]
+                        #     policy_subset = action_policy[[-1]]
+                        #     next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
+                        #     action_timestamp = eval_t_start + (next_step_idx) * dt
+                        #     action_timestamps = np.array([action_timestamp])
+                        # else:
+                        #     robot_subset  = action_robot[is_new]
+                        #     policy_subset = action_policy[is_new]
+                        #     action_timestamps = action_timestamps[is_new]
+
+                        # this_target_poses = robot_subset
+
+                        # # unified logging: robot + policy in one row
+                        # for a_robot, a_policy, t in zip(robot_subset, policy_subset, action_timestamps):
+                        #     action_log.append({
+                        #         'timestamp': t,
+                        #         # robot-frame pose (what you executed)
+                        #         'robot_x':  a_robot[0], 'robot_y':  a_robot[1], 'robot_z':  a_robot[2],
+                        #         'robot_rx': a_robot[3], 'robot_ry': a_robot[4], 'robot_rz': a_robot[5],
+                        #         # policy-frame pose (what the policy predicted, before mapping)
+                        #         'policy_x':  a_policy[0], 'policy_y':  a_policy[1], 'policy_z':  a_policy[2],
+                        #         'policy_rx': a_policy[3], 'policy_ry': a_policy[4], 'policy_rz': a_policy[5]
+                        #     })
 
                         # execute actions
                         env.exec_actions(
@@ -438,7 +449,7 @@ def main():
                             timestamps=action_timestamps,
                             compensate_latency=True
                         )
-                        print(f"Submitted {len(this_target_poses)} steps of actions.")
+                        # print(f"Submitted {len(this_target_poses)} steps of actions.")
 
                         # _ = cv2.pollKey()
                         press_events = key_counter.get_press_events()
@@ -471,6 +482,15 @@ def main():
                         csv_path = os.path.join(output, f"policy_actions_{time_now}.csv")
                         df.to_csv(csv_path, index=False)
                         print(f"Saved actions to {csv_path}")
+
+                    # Save camera observations
+                    if len(image_observations) > 0:
+                        images_array = np.stack(image_observations, axis=0)  # Shape: (N, 224, 224, 3)
+                        time_now = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        npy_path = os.path.join(output, f"camera_observations_{time_now}.npy")
+                        np.save(npy_path, images_array)
+                        print(f"Saved {images_array.shape[0]} camera frames to {npy_path}")
+                        print(f"Final shape: {images_array.shape}")
                     # stop robot.
                     env.end_episode()
                     

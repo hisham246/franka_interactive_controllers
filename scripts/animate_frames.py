@@ -183,7 +183,7 @@ def plot_trajectory_summary(csv_file):
 
 # Example usage
 if __name__ == "__main__":
-    csv_file = "/home/hisham246/uwaterloo/umi/surface_wiping_tp/csv/episode_25.csv"
+    csv_file = "/home/hisham246/uwaterloo/umi/reaching_ball_multimodal/csv/episode_1.csv"
     
     print("Creating trajectory summary plots...")
     plot_trajectory_summary(csv_file)
