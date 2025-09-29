@@ -372,8 +372,6 @@ def main():
                             obs_dict = dict_apply(obs_dict_np, 
                                 lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
 
-                            # print("Observation dictionary", obs_dict)
-
                             result = policy.predict_action(obs_dict)
                             raw_action = result['action_pred'][0].detach().cpu().numpy()
 
