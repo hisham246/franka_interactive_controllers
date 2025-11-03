@@ -108,11 +108,11 @@ def main():
             now = rospy.Time.now().to_sec()
             t_rel = now - start_time
 
-            if t_rel < duration:
+            if t_rel > duration:
                 # Compute desired Z based on elapsed time (linear motion)
-                cmd_pose.position.z = 0.01 * np.sin(t_rel) + 0.0 
+                # cmd_pose.position.z = 0.01 * np.sin(t_rel) + 0.0 
                 # initial_pose.position.z - z_speed * t_rel
-            else:
+            # else:
                 rospy.loginfo("Duration reached, stopping motion.")
                 break
 
