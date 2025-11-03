@@ -68,7 +68,7 @@ def main():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    duration      = rospy.get_param("~duration", 10.0)       # seconds
+    duration      = rospy.get_param("~duration", 60.0)       # seconds
     frequency     = rospy.get_param("~frequency", 100.0)      # Hz
     z_speed       = rospy.get_param("~z_speed", 0.01)        # m/s (positive = up)
     output_csv    = rospy.get_param("~output_csv", f"ee_z_displacement_log_{timestamp}.csv")
@@ -108,11 +108,11 @@ def main():
             now = rospy.Time.now().to_sec()
             t_rel = now - start_time
 
-            if t_rel > duration:
+            if t_rel < duration:
                 # Compute desired Z based on elapsed time (linear motion)
-                # cmd_pose.position.z = 0.01 * np.sin(t_rel) + 0.0 
+                cmd_pose.position.z = 0.01 * np.sin(t_rel) + 0.1
                 # initial_pose.position.z - z_speed * t_rel
-            # else:
+            else:
                 rospy.loginfo("Duration reached, stopping motion.")
                 break
 
