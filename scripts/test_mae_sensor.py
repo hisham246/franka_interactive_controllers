@@ -9,6 +9,8 @@ from scipy.spatial.transform import Rotation as R
 import threading
 from datetime import datetime
 
+# initial_pose = [0.5]
+
 
 class EEPoseListener:
     """Subscribe to EE pose and keep the latest Pose."""
@@ -108,9 +110,8 @@ def main():
 
             if t_rel < duration:
                 # Compute desired Z based on elapsed time (linear motion)
-                cmd_pose.position.z = -(initial_pose.position.z - z_speed * t_rel)
-            elif t_rel < duration*2:
-                cmd_pose.position.z = initial_pose.position.z - z_speed * duration
+                cmd_pose.position.z = 0.01 * np.sin(0.1*t_rel) + 0.0 
+                # initial_pose.position.z - z_speed * t_rel
             else:
                 rospy.loginfo("Duration reached, stopping motion.")
                 break
