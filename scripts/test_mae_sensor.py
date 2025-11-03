@@ -7,6 +7,7 @@ import numpy as np
 from geometry_msgs.msg import Pose, PoseStamped
 from scipy.spatial.transform import Rotation as R
 import threading
+from datetime import datetime
 
 
 class EEPoseListener:
@@ -63,10 +64,12 @@ def main():
     command_topic = rospy.get_param("~command_topic", "/cartesian_pose_impedance_controller/desired_pose")
     frame_id      = rospy.get_param("~frame_id", "panda_link0")
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     duration      = rospy.get_param("~duration", 10.0)       # seconds
     frequency     = rospy.get_param("~frequency", 100.0)      # Hz
     z_speed       = rospy.get_param("~z_speed", 0.01)        # m/s (positive = up)
-    output_csv    = rospy.get_param("~output_csv", "ee_z_displacement_log.csv")
+    output_csv    = rospy.get_param("~output_csv", f"ee_z_displacement_log_{timestamp}.csv")
 
     rospy.loginfo(f"Will move along +Z at {z_speed} m/s for {duration} s.")
 
@@ -103,12 +106,14 @@ def main():
             now = rospy.Time.now().to_sec()
             t_rel = now - start_time
 
-            if t_rel > duration:
+            if t_rel < duration:
+                # Compute desired Z based on elapsed time (linear motion)
+                cmd_pose.position.z = -(initial_pose.position.z - z_speed * t_rel)
+            elif t_rel < duration*2:
+                cmd_pose.position.z = initial_pose.position.z - z_speed * duration
+            else:
                 rospy.loginfo("Duration reached, stopping motion.")
                 break
-
-            # Compute desired Z based on elapsed time (linear motion)
-            cmd_pose.position.z = initial_pose.position.z - z_speed * t_rel
 
             # Publish desired pose
             pose_stamped = make_pose_stamped_from_pose(cmd_pose, frame_id=frame_id)
