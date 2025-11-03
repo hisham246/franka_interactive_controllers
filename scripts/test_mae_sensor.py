@@ -108,17 +108,17 @@ def main():
             now = rospy.Time.now().to_sec()
             t_rel = now - start_time
 
-            if t_rel < duration:
-                # Compute desired Z based on elapsed time (linear motion)
-                cmd_pose.position.z = 0.03 * np.sin(t_rel) - 0.08
-                # initial_pose.position.z - z_speed * t_rel
-            else:
-                rospy.loginfo("Duration reached, stopping motion.")
-                break
+            # if t_rel < duration:
+            #     # Compute desired Z based on elapsed time (linear motion)
+            #     cmd_pose.position.z = 0.05 * np.sin(t_rel) - 0.08
+            #     # initial_pose.position.z - z_speed * t_rel
+            # else:
+            #     rospy.loginfo("Duration reached, stopping motion.")
+            #     break
 
             # Publish desired pose
-            pose_stamped = make_pose_stamped_from_pose(cmd_pose, frame_id=frame_id)
-            pose_pub.publish(pose_stamped)
+            # pose_stamped = make_pose_stamped_from_pose(cmd_pose, frame_id=frame_id)
+            # pose_pub.publish(pose_stamped)
 
             # Get latest actual EE pose and log it
             latest_pose = ee_listener.get_latest_pose()
