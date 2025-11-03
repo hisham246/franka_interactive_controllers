@@ -221,7 +221,7 @@ def main():
     """Main function to visualize saved camera observations."""
     
     # Path to your saved .npy file
-    npy_path = "/home/hisham246/uwaterloo/reaching_ball_multimodal_3/camera_observations_20250929_175538.npy"
+    npy_path = "/home/hisham246/uwaterloo/reaching_ball_multimodal_3/camera_observations_20250929_190027.npy"
     
     # Load images
     images = load_camera_observations(npy_path)
