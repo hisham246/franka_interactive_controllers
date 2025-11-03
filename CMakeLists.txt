@@ -186,6 +186,7 @@ catkin_install_python(
   scripts/move_gripper.py
   scripts/joint_impedance_test.py
   scripts/replay_traj.py
+  scripts/test_mae_sensor.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
