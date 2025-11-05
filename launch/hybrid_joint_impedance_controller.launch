@@ -5,6 +5,7 @@
   <arg name="use_interactive_marker" default="false" />
   <arg name="use_gripper_gui"        default="false" />
   <arg name="load_franka_control"    default="false" />
+  <arg name="record_demos"           default="true" />
 
   <!-- Bringup franka_interactive_bringup.laucnh -->
   <group if="$(arg load_franka_control)">
@@ -14,6 +15,18 @@
       <arg name="use_gripper_gui" value="$(arg use_gripper_gui)" />
       <arg name="bringup_rviz" value="true" />
     </include>
+    <!-- Only start the recorder if record_demos is true -->
+  <node name="pose_recorder"
+        pkg="franka_interactive_controllers"
+        type="record_demos.py"
+        output="screen"
+        if="$(arg record_demos)">
+
+    <!-- These match rospy.get_param('~output_dir'), etc. -->
+    <param name="output_dir"     value="$$(find franka_interactive_controllers)/robot_demos" />
+    <param name="output_filename" value="franka_ee_pose" />
+    <param name="buffer_size"    value="10000" />
+    </node>
   </group>
   
   <!-- Loads controller parameters -->
