@@ -17,9 +17,9 @@ class PoseRecorder:
         rospy.init_node('pose_recorder', anonymous=True)
         
         # Get parameters
-        self.output_dir = rospy.get_param('~output_dir', os.path.expanduser('~/robot_data'))
-        self.output_filename = rospy.get_param('~output_filename', 'pose_data')
-        self.buffer_size = rospy.get_param('~buffer_size', 10000)  # Number of samples to buffer
+        self.output_dir = "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos"
+        self.output_filename = "franka_ee_pose"
+        self.buffer_size = 10000  # Number of samples to buffer
         
         # Create output directory if it doesn't exist
         if not os.path.exists(self.output_dir):
