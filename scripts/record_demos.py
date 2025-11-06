@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-High-frequency pose recorder for Franka Emika Panda robot.
-Subscribes to the EE pose topic and saves Cartesian poses with timestamps.
+High-frequency pose + Cartesian velocity recorder for Franka Emika Panda robot.
+- Subscribes to the EE pose topic (Pose) and FrankaState.
+- Saves Cartesian pose and O_dP_EE_d / O_dP_EE_c (desired/commanded EE twist) with timestamps.
 """
 
 import rospy
 import numpy as np
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose
+from franka_msgs.msg import FrankaState
 from datetime import datetime
 import os
 import threading
@@ -16,7 +18,7 @@ class PoseRecorder:
     def __init__(self):
         rospy.init_node('pose_recorder', anonymous=True)
         
-        # Get parameters
+        # Hard-coded parameters (adjust as you like)
         self.output_dir = "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos"
         self.output_filename = "franka_ee_pose"
         self.buffer_size = 10000  # Number of samples to buffer
@@ -41,16 +43,29 @@ class PoseRecorder:
         # Statistics
         self.sample_count = 0
         self.start_time = None
+
+        # Latest Franka state fields we care about
+        self.latest_O_dP_EE_d = None  # 6D desired twist
+        self.latest_O_dP_EE_c = None  # 6D commanded twist
         
         # Initialize CSV file with header
         self._initialize_file()
         
-        # Subscribe to Franka end-effector pose topic
+        # Subscribe to Franka end-effector pose topic (Pose)
         self.pose_sub = rospy.Subscriber(
             '/franka_state_controller/ee_pose',
-            PoseStamped,
+            Pose,
             self.pose_callback,
-            queue_size=1000,  # Large queue to handle 1kHz
+            queue_size=1000,
+            tcp_nodelay=True
+        )
+
+        # Subscribe to FrankaState for O_dP_EE_d / O_dP_EE_c
+        self.state_sub = rospy.Subscriber(
+            '/franka_state_controller/franka_states',  # adjust topic name if needed
+            FrankaState,
+            self.state_callback,
+            queue_size=1000,
             tcp_nodelay=True
         )
         
@@ -60,19 +75,34 @@ class PoseRecorder:
         self.write_thread.start()
         
         rospy.loginfo(f"Pose recorder initialized. Saving to: {self.filepath}")
-        rospy.loginfo("Subscribed to: /franka_state_controller/ee_pose")
+        rospy.loginfo("Subscribed to: /franka_state_controller/ee_pose (Pose)")
+        rospy.loginfo("Subscribed to: /franka_state_controller/franka_state (FrankaState)")
         rospy.loginfo("Recording started...")
     
     def _initialize_file(self):
         """Initialize CSV file with header."""
         with open(self.filepath, 'w') as f:
-            header = "timestamp_sec,timestamp_nsec,ros_time_sec,ros_time_nsec,"
+            # Time
+            header = "ros_time_sec,ros_time_nsec,"
+            # Pose
             header += "pos_x,pos_y,pos_z,"
-            header += "quat_x,quat_y,quat_z,quat_w\n"
+            header += "quat_x,quat_y,quat_z,quat_w,"
+            # O_dP_EE_d (desired EE twist)
+            header += "O_dP_EE_d_vx,O_dP_EE_d_vy,O_dP_EE_d_vz,"
+            header += "O_dP_EE_d_wx,O_dP_EE_d_wy,O_dP_EE_d_wz,"
+            # O_dP_EE_c (commanded EE twist)
+            header += "O_dP_EE_c_vx,O_dP_EE_c_vy,O_dP_EE_c_vz,"
+            header += "O_dP_EE_c_wx,O_dP_EE_c_wy,O_dP_EE_c_wz\n"
             f.write(header)
-    
+
+    def state_callback(self, msg):
+        """Callback for FrankaState messages, store latest twists."""
+        # These are float64[6] arrays in FrankaState
+        self.latest_O_dP_EE_d = np.array(msg.O_dP_EE_d, dtype=float)
+        self.latest_O_dP_EE_c = np.array(msg.O_dP_EE_c, dtype=float)
+
     def pose_callback(self, msg):
-        """High-frequency callback for pose messages."""
+        """High-frequency callback for pose messages (primary trigger for logging)."""
         if not self.recording:
             return
         
@@ -82,19 +112,46 @@ class PoseRecorder:
         if self.start_time is None:
             self.start_time = now
         
-        # Extract data
+        # Pose
+        pos = msg.position
+        quat = msg.orientation
+
+        # Use latest FrankaState if available, otherwise NaNs
+        if self.latest_O_dP_EE_d is not None:
+            O_dP_EE_d = self.latest_O_dP_EE_d
+        else:
+            O_dP_EE_d = np.full(6, np.nan)
+
+        if self.latest_O_dP_EE_c is not None:
+            O_dP_EE_c = self.latest_O_dP_EE_c
+        else:
+            O_dP_EE_c = np.full(6, np.nan)
+        
+        # Extract data row
         data_row = [
-            now.secs,
-            now.nsecs,
-            msg.header.stamp.secs,
-            msg.header.stamp.nsecs,
-            msg.pose.position.x,
-            msg.pose.position.y,
-            msg.pose.position.z,
-            msg.pose.orientation.x,
-            msg.pose.orientation.y,
-            msg.pose.orientation.z,
-            msg.pose.orientation.w
+            float(now.secs),
+            float(now.nsecs),
+            float(pos.x),
+            float(pos.y),
+            float(pos.z),
+            float(quat.x),
+            float(quat.y),
+            float(quat.z),
+            float(quat.w),
+            # desired twist
+            float(O_dP_EE_d[0]),
+            float(O_dP_EE_d[1]),
+            float(O_dP_EE_d[2]),
+            float(O_dP_EE_d[3]),
+            float(O_dP_EE_d[4]),
+            float(O_dP_EE_d[5]),
+            # commanded twist
+            float(O_dP_EE_c[0]),
+            float(O_dP_EE_c[1]),
+            float(O_dP_EE_c[2]),
+            float(O_dP_EE_c[3]),
+            float(O_dP_EE_c[4]),
+            float(O_dP_EE_c[5]),
         ]
         
         # Add to buffer (thread-safe)
@@ -112,7 +169,7 @@ class PoseRecorder:
             return
         
         # Convert to numpy array for efficient writing
-        data_array = np.array(self.data_buffer)
+        data_array = np.array(self.data_buffer, dtype=float)
         
         # Append to CSV
         with open(self.filepath, 'a') as f:
