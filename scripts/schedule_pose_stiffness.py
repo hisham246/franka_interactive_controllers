@@ -17,7 +17,7 @@ class TrajectoryReplayer:
         # )
         self.csv_path = rospy.get_param(
             "~csv_path",
-            "/home/robohub/hisham/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
+            "/home/robohub/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
         )
         
         self.rate_hz = rospy.get_param("~rate_hz", 600.0)  # playback frequency
