@@ -20,7 +20,7 @@ class TrajectoryReplayer:
             "/home/robohub/hisham/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
         )
         
-        self.rate_hz = rospy.get_param("~rate_hz", 1200.0)  # playback frequency
+        self.rate_hz = rospy.get_param("~rate_hz", 600.0)  # playback frequency
         self.wait_before_start = rospy.get_param("~wait_before_start", 3.0)  # seconds
 
         # Frame id for PoseStamped
