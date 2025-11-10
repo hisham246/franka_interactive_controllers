@@ -11,14 +11,14 @@ from dynamic_reconfigure.client import Client as DynamicReconfigureClient
 class TrajectoryReplayer:
     def __init__(self):
         # You can turn this into a param if you like
-        self.csv_path = rospy.get_param(
-            "~csv_path",
-            "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
-        )
         # self.csv_path = rospy.get_param(
         #     "~csv_path",
-        #     "/home/robohub/hisham/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
+        #     "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
         # )
+        self.csv_path = rospy.get_param(
+            "~csv_path",
+            "/home/robohub/hisham/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
+        )
         
         self.rate_hz = rospy.get_param("~rate_hz", 1200.0)  # playback frequency
         self.wait_before_start = rospy.get_param("~wait_before_start", 3.0)  # seconds
