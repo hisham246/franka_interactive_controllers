@@ -188,6 +188,7 @@ catkin_install_python(
   scripts/replay_traj.py
   scripts/test_mae_sensor.py
   scripts/record_demos.py
+  scripts/schedule_pose_stiffness.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
