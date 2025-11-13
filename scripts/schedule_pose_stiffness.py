@@ -13,11 +13,11 @@ class TrajectoryReplayer:
         # You can turn this into a param if you like
         # self.csv_path = rospy.get_param(
         #     "~csv_path",
-        #     "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
+        #     "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos/cable_reroute_and_insert/stiffness/demo_00_pos_vel_stiffness.csv",
         # )
         self.csv_path = rospy.get_param(
             "~csv_path",
-            "/home/robohub/panda_ws/src/franka_interactive_controllers/robot_demos/stiffness/demo_01_pos_vel_stiffness.csv",
+            "/home/robohub/panda_ws/src/franka_interactive_controllers/robot_demos/cable_reroute_and_insert/stiffness/demo_00_pos_vel_stiffness.csv",
         )
         
         self.rate_hz = rospy.get_param("~rate_hz", 600.0)  # playback frequency
@@ -220,9 +220,9 @@ class TrajectoryReplayer:
             if rospy.is_shutdown():
                 break
 
-            # # Update stiffness for this step
-            # k_vec = self.stiffness[idx]
-            # self._update_stiffness(k_vec)
+            # Update stiffness for this step
+            k_vec = self.stiffness[idx]
+            self._update_stiffness(k_vec)
 
             pose_msg = PoseStamped()
             pose_msg.header.stamp = rospy.Time.now()
