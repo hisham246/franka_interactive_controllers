@@ -267,9 +267,9 @@ class TrajectoryReplayer:
             if rospy.is_shutdown():
                 break
 
-            # Update stiffness for this step
-            k_vec = self.stiffness[idx]
-            self._update_stiffness(k_vec)
+            # # Update stiffness for this step
+            # k_vec = self.stiffness[idx]
+            # self._update_stiffness(k_vec)
 
             pose_msg = PoseStamped()
             pose_msg.header.stamp = rospy.Time.now()
