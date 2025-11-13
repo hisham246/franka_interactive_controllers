@@ -48,6 +48,7 @@ class PoseRecorder:
         # Latest Franka state fields we care about
         self.latest_O_dP_EE_d = None  # 6D desired twist
         self.latest_O_dP_EE_c = None  # 6D commanded twist
+        self.latest_gripper_pos = None
         
         # Initialize CSV file with header
         self._initialize_file()
