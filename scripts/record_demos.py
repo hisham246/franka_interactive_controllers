@@ -9,6 +9,7 @@ import rospy
 import numpy as np
 from geometry_msgs.msg import Pose
 from franka_msgs.msg import FrankaState
+from sensor_msgs.msg import JointState
 from datetime import datetime
 import os
 import threading
@@ -68,6 +69,15 @@ class PoseRecorder:
             queue_size=1000,
             tcp_nodelay=True
         )
+
+        # Subscribe to gripper joint states (lower frequency)
+        self.gripper_sub = rospy.Subscriber(
+            '/franka_gripper/joint_states',
+            JointState,
+            self.gripper_callback,
+            queue_size=100,
+            tcp_nodelay=True
+        )
         
         # Start background thread for writing data
         self.write_thread = threading.Thread(target=self._write_loop)
@@ -77,6 +87,7 @@ class PoseRecorder:
         rospy.loginfo(f"Pose recorder initialized. Saving to: {self.filepath}")
         rospy.loginfo("Subscribed to: /franka_state_controller/ee_pose (Pose)")
         rospy.loginfo("Subscribed to: /franka_state_controller/franka_state (FrankaState)")
+        rospy.loginfo("Subscribed to: /franka_gripper/joint_states (JointState)")
         rospy.loginfo("Recording started...")
     
     def _initialize_file(self):
@@ -87,6 +98,8 @@ class PoseRecorder:
             # Pose
             header += "pos_x,pos_y,pos_z,"
             header += "quat_x,quat_y,quat_z,quat_w,"
+            # Gripper
+            header += "gripper_pos_f1,gripper_pos_f2,"
             # O_dP_EE_d (desired EE twist)
             header += "O_dP_EE_d_vx,O_dP_EE_d_vy,O_dP_EE_d_vz,"
             header += "O_dP_EE_d_wx,O_dP_EE_d_wy,O_dP_EE_d_wz,"
@@ -100,6 +113,15 @@ class PoseRecorder:
         # These are float64[6] arrays in FrankaState
         self.latest_O_dP_EE_d = np.array(msg.O_dP_EE_d, dtype=float)
         self.latest_O_dP_EE_c = np.array(msg.O_dP_EE_c, dtype=float)
+
+    def gripper_callback(self, msg):
+        """Callback for gripper joint states; store latest finger positions."""
+        if len(msg.position) >= 2:
+            # position[0] = finger 1, position[1] = finger 2
+            self.latest_gripper_pos = np.array(msg.position[:2], dtype=float)
+        else:
+            # If something weird happens, store NaNs
+            self.latest_gripper_pos = np.full(2, np.nan)
 
     def pose_callback(self, msg):
         """High-frequency callback for pose messages (primary trigger for logging)."""
@@ -126,6 +148,12 @@ class PoseRecorder:
             O_dP_EE_c = self.latest_O_dP_EE_c
         else:
             O_dP_EE_c = np.full(6, np.nan)
+
+        # Use latest gripper state (sample-and-hold), otherwise NaNs
+        if self.latest_gripper_pos is not None:
+            gpos = self.latest_gripper_pos
+        else:
+            gpos = np.full(2, np.nan)
         
         # Extract data row
         data_row = [
@@ -138,6 +166,9 @@ class PoseRecorder:
             float(quat.y),
             float(quat.z),
             float(quat.w),
+            # Gripper
+            float(gpos[0]),
+            float(gpos[1]),
             # desired twist
             float(O_dP_EE_d[0]),
             float(O_dP_EE_d[1]),
