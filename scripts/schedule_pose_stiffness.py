@@ -304,7 +304,15 @@ class TrajectoryReplayer:
         while not rospy.is_shutdown() and rospy.Time.now() < end_time:
             final_pose.header.stamp = rospy.Time.now()
             self.pub.publish(final_pose)
+
+            # Still log wrench during hold
+            if self.latest_wrench is not None:
+                self.wrench_log.append(self.latest_wrench)
+
             rate.sleep()
+
+        # Save the wrench log
+        self._save_wrench()
 
         rospy.loginfo("Trajectory replay node finished.")
 
