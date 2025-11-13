@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import rospy
 import numpy as np
+import os
 
-from geometry_msgs.msg import PoseStamped, Quaternion
+from datetime import datetime
+from geometry_msgs.msg import PoseStamped, Quaternion, WrenchStamped
 from franka_msgs.msg import FrankaState
 from tf.transformations import quaternion_from_matrix
 from dynamic_reconfigure.client import Client as DynamicReconfigureClient
@@ -69,6 +71,30 @@ class TrajectoryReplayer:
             f"{self.initial_orientation.y}, "
             f"{self.initial_orientation.z}, "
             f"{self.initial_orientation.w}]"
+        )
+
+        # Wrench recording setup
+        self.f_ext_topic = rospy.get_param(
+            "~f_ext_topic", "/franka_state_controller/F_ext"
+        )
+        # Latest wrench (Fx, Fy, Fz, Tx, Ty, Tz)
+        self.latest_wrench = None
+        # List of [t, Fx, Fy, Fz, Tx, Ty, Tz] rows
+        self.wrench_log = []
+
+        rospy.Subscriber(self.f_ext_topic, WrenchStamped, self._f_ext_callback)
+        rospy.loginfo(f"Subscribed to external wrench topic: {self.f_ext_topic}")
+
+    def _f_ext_callback(self, msg: WrenchStamped):
+        """Callback to store the latest external wrench."""
+        self.latest_wrench = (
+            msg.header.stamp.to_sec(),
+            msg.wrench.force.x,
+            msg.wrench.force.y,
+            msg.wrench.force.z,
+            msg.wrench.torque.x,
+            msg.wrench.torque.y,
+            msg.wrench.torque.z,
         )
 
     def _load_positions_from_csv(self, csv_path):
@@ -192,6 +218,27 @@ class TrajectoryReplayer:
             # You can make this rospy.logerr once if you like; keeping it warn to not spam
             rospy.logwarn(f"Failed to update stiffness via dynamic_reconfigure: {e}")
 
+    def _save_wrench(self):
+        """Save recorded wrench data to a CSV in the same 'stiffness' directory."""
+        if not self.wrench_log:
+            rospy.logwarn("No wrench data recorded, skipping CSV save.")
+            return
+
+        wrench_array = np.array(self.wrench_log)
+
+        # Directory is the same as the original CSV
+        base_dir = os.path.dirname(self.csv_path)
+
+        # Timestamp-based filename, independent of demo name
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_name = f"wrench_{timestamp}.csv"
+        out_path = os.path.join(base_dir, out_name)
+
+        header = "time,Fx,Fy,Fz,Tx,Ty,Tz"
+        np.savetxt(out_path, wrench_array, delimiter=",", header=header, comments="")
+
+        rospy.loginfo(f"Saved wrench data to: {out_path}")
+
     def run(self):
         rospy.loginfo(
             f"Waiting {self.wait_before_start} seconds before starting playback..."
@@ -238,6 +285,9 @@ class TrajectoryReplayer:
             pose_msg.pose.orientation.w = ori.w
 
             self.pub.publish(pose_msg)
+
+            if self.latest_wrench is not None:
+                self.wrench_log.append(self.latest_wrench)
             rate.sleep()
 
         # Hold the last pose for a bit so the controller stabilizes
