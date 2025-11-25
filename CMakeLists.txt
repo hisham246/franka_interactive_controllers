@@ -189,6 +189,7 @@ catkin_install_python(
   scripts/test_mae_sensor.py
   scripts/record_demos.py
   scripts/schedule_pose_stiffness.py
+  scripts/snds_panda_twist_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
