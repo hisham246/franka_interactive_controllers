@@ -48,7 +48,9 @@ def main():
     model_name = "test-snds-24-11-20-29"
     network = "snds"  # Network type used during training
     goal_pos = np.array([0.502043495, 0.113929932, 0.100071396], dtype=np.float32)  # Set the desired goal position
-    cmd_topic = "/passiveDS/desired_twist"  # TwistStamped topic
+    # cmd_topic = "/passiveDS/desired_twist"  # twist topic
+    cmd_topic = "/cartesian_impedance_controller/desired_twist"
+
     rate_hz = 100.0  # Control rate in Hz
     vel_scale = 1.0  # Scaling factor for the velocity
 

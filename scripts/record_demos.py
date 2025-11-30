@@ -20,7 +20,7 @@ class PoseRecorder:
         rospy.init_node('pose_recorder', anonymous=True)
         
         # Hard-coded parameters (adjust as you like)
-        self.output_dir = "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos"
+        self.output_dir = "/home/hisham246/uwaterloo/panda_ws/src/franka_interactive_controllers/robot_demos/peg_in_hole"
         self.output_filename = "franka_ee_pose"
         self.buffer_size = 10000  # Number of samples to buffer
         
